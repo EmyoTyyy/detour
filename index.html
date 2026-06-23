@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Detour</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main id="app">
+    <!-- Menu -->
+    <section id="menu" class="screen is-active">
+      <div class="brand">
+        <h1 class="brand-title">Detour</h1>
+      </div>
+      <div class="modes">
+        <button class="mode-btn" data-mode="local">
+          <span class="mode-name">Local 1v1</span>
+          <span class="mode-sub">Two players, one device</span>
+        </button>
+        <button class="mode-btn" data-mode="bot">
+          <span class="mode-name">Play vs Bot</span>
+          <span class="mode-sub" data-record="bot">—</span>
+        </button>
+        <button class="mode-btn" data-mode="hard">
+          <span class="mode-name">Hard Mode AI</span>
+          <span class="mode-sub" data-record="hard">—</span>
+        </button>
+        <button class="mode-btn" data-mode="friend">
+          <span class="mode-name">Play with a Friend</span>
+          <span class="mode-sub">Online room code</span>
+        </button>
+      </div>
+      <button class="link-btn" id="how-btn">How to play</button>
+    </section>
+
+    <!-- Online (friend room code) -->
+    <section id="online" class="screen">
+      <header class="hud">
+        <button class="icon-btn" id="online-back" title="Back to menu" aria-label="Back to menu">‹</button>
+        <div class="online-head">Play with a Friend</div>
+        <span class="hud-spacer"></span>
+      </header>
+      <div class="online-panel">
+        <button class="btn primary big" id="create-room">Create a room</button>
+        <div class="online-or">or</div>
+        <div class="join-row">
+          <input id="join-code" class="code-input" placeholder="CODE" maxlength="4"
+                 autocomplete="off" autocapitalize="characters" spellcheck="false" />
+          <button class="btn" id="join-room">Join</button>
+        </div>
+        <div id="room-display" hidden>
+          <div class="room-label">Share this code</div>
+          <div class="room-code" id="room-code">----</div>
+          <button class="btn ghost" id="copy-code">Copy code</button>
+        </div>
+        <div class="online-status" id="online-status"></div>
+      </div>
+    </section>
+
+    <!-- Game -->
+    <section id="game" class="screen">
+      <header class="hud">
+        <button class="icon-btn" id="back-btn" title="Back to menu" aria-label="Back to menu">‹</button>
+        <div class="players">
+          <div class="player" data-player="1">
+            <span class="dot p2"></span>
+            <span class="p-name" data-name="1">Player 2</span>
+            <span class="p-walls" data-walls="1">10</span>
+          </div>
+          <div class="player" data-player="0">
+            <span class="dot p1"></span>
+            <span class="p-name" data-name="0">Player 1</span>
+            <span class="p-walls" data-walls="0">10</span>
+          </div>
+        </div>
+        <button class="icon-btn" id="restart-btn" title="Restart" aria-label="Restart">↺</button>
+      </header>
+
+      <div class="status" id="status">Player 1's turn</div>
+
+      <div class="board-wrap">
+        <div class="board" id="board"></div>
+      </div>
+
+      <div class="tray" id="tray">
+        <button class="rotate-btn" id="rotate-btn" title="Rotate wall">
+          <span class="rotate-glyph">⊞</span>
+          <span id="orient-label">Horizontal</span>
+        </button>
+        <div class="inventory" id="inventory"></div>
+        <div class="tray-hint">drag a wall onto the board</div>
+      </div>
+    </section>
+
+    <!-- Win overlay -->
+    <div id="overlay" class="overlay">
+      <div class="overlay-card">
+        <h2 id="win-title">You win</h2>
+        <p id="win-sub" class="win-sub"></p>
+        <div class="overlay-actions">
+          <button class="btn primary" id="rematch-btn">Rematch</button>
+          <button class="btn" id="menu-btn">Menu</button>
+          <button class="btn ghost" id="share-btn">Share</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- How to play -->
+    <div id="how" class="overlay">
+      <div class="overlay-card how-card">
+        <h2>How to play</h2>
+        <ul class="how-list">
+          <li>Each turn: <strong>move</strong> your pawn one step, or <strong>place a wall</strong>.</li>
+          <li>First pawn to reach the opposite row wins.</li>
+          <li>Walls go between cells and block movement. You start with 10.</li>
+          <li>A wall can't fully trap a player — both must keep a path home.</li>
+          <li>Jump a face-to-face opponent; side-step if a wall is behind them.</li>
+        </ul>
+        <div class="overlay-actions">
+          <button class="btn primary" id="how-close">Got it</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+  </main>
+
+  <script src="rules.js"></script>
+  <script src="bot.js"></script>
+  <script src="net.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
