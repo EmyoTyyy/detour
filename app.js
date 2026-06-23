@@ -54,21 +54,28 @@
 
   // ---------- match lifecycle ----------
   function setControls() {
-    const net = !!M.net;
-    const otour = M.mode === 'otour';
-    $('#restart-btn').hidden = net || otour;                 // restart only in local / bot / tournament
-    $('#forfeit-btn').hidden = !(net || (otour && M.playing)); // forfeit online, or as a playing entrant
-    $('#draw-btn').hidden = M.mode === 'bot' || otour;        // no draws online-tournament (v1)
+    const net = !!M.net;                       // friend 1v1
+    const otour = M.mode === 'otour';          // online tournament
+    const freeplay = M.mode === 'local';       // local hotseat 1v1
+    const tournament = M.mode === 'tournament'; // local tournament
+    // Resign + draw live in every competitive mode except bot games and freeplay.
+    const compete = net || tournament || (otour && M.playing);
+    $('#restart-btn').hidden = !freeplay;      // restart: freeplay only
+    $('#forfeit-btn').hidden = !compete;       // resign: friend + tournaments
+    $('#draw-btn').hidden = !compete;          // draw:   friend + tournaments
   }
 
   function startMatch(mode, difficulty) {
+    const st = mySettings();
     M = {
-      state: R.createState(),
+      state: R.createState(st.walls),
       mode,
       difficulty: mode === 'bot' ? difficulty : null,
       human: mode === 'local' ? [true, true] : [true, false],
       orient: 'h',
       net: null,
+      settings: st,
+      clock: setupClock(st),
     };
     setControls();
     drag = null;
@@ -77,22 +84,27 @@
     showScreen('game');
     render();
     maybeBot();
+    startClock();
   }
 
-  function startNetMatch(role, myPlayer) {
+  function startNetMatch(role, myPlayer, settings) {
+    const st = settings || (M && M.settings) || mySettings();
     M = {
-      state: R.createState(),
+      state: R.createState(st.walls),
       mode: 'net',
       difficulty: null,
       human: [false, false],
       orient: 'h',
       net: { role, myPlayer, connected: true },
+      settings: st,
+      clock: setupClock(st),
     };
     setControls();
     drag = null;
     closeOverlay('overlay');
     showScreen('game');
     render();
+    startClock();
   }
 
   function setOrient(orient) { M.orient = orient; render(); }
@@ -100,11 +112,11 @@
   const hotseat = () => M.mode === 'local' || M.mode === 'tournament';
 
   // Index of the "near" player: shown at the bottom in teal, opponent at the top in amber.
-  // Hotseat games flip each turn so the player to move is always at the bottom.
+  // Networked games flip per-client so you're at the bottom; local games keep a fixed board.
   const meIndex = () => {
     if (M.mode === 'otour') return M.seat;
     if (M.net) return M.net.myPlayer;
-    return hotseat() ? M.state.turn : 0;
+    return 0;
   };
 
   function nameOf(idx) {
@@ -134,9 +146,11 @@
 
   function applyAction(action, fromRemote) {
     const s = M.state;
+    const actor = s.turn;
     if (action.type === 'wall') R.applyWall(s, action.orient, action.r, action.c);
     else R.applyMove(s, action.to);
-    if (M.net && !fromRemote) window.Net.send(action);
+    clockOnAction(actor, fromRemote, action);
+    if (M.net && !fromRemote) { if (M.clock) action.clk = M.clock.rem[actor]; window.Net.send(action); }
     render();
     if (s.winner !== null) return endMatch();
     if (!M.net) maybeBot();
@@ -155,6 +169,7 @@
   }
 
   function showWin(title, sub) {
+    stopClock();
     $('#win-title').textContent = title;
     $('#win-sub').textContent = sub;
     statusEl.textContent = title;
@@ -195,13 +210,19 @@
       else window.Net.sendHost({ t: 'forfeit' });
       return;
     }
+    if (M.mode === 'tournament') {        // the player to move concedes the match
+      const loser = M.state.turn;
+      M.state.winner = 1 - loser;
+      return endTournamentMatch(1 - loser);
+    }
     if (!M.net) return;
     window.Net.send({ type: 'forfeit' });
     M.state.winner = 1 - M.net.myPlayer;
-    showWin('You forfeited', 'You bailed on the race.');
+    showWin('You resigned', 'You bailed on the race.');
   }
 
   function leaveMatch() {
+    stopClock();
     if (M && M.mode === 'otour') return leaveOtour();
     if (M && M.mode === 'net') window.Net.close();
     closeOverlay('overlay');
@@ -219,8 +240,14 @@
   // ---------- draw ----------
   function offerDraw() {
     if (!M || M.state.winner !== null) return;
+    if (M.mode === 'otour') {                 // online tournament: route through the host
+      if (!M.playing) return;
+      if (M.otour.host) { hostDrawOffer(HOST_ID); toast('Draw offer sent'); }
+      else { window.Net.sendHost({ t: 'draw-offer' }); toast('Draw offer sent'); }
+      return;
+    }
     if (M.net) { window.Net.send({ type: 'draw-offer' }); toast('Draw offer sent'); }
-    else openDrawPrompt('local');
+    else openDrawPrompt('local');             // local tournament (hotseat)
   }
   function endAsDraw() {
     if (M.state.winner !== null) return;
@@ -229,7 +256,7 @@
   }
   function openDrawPrompt(ctx) {
     drawCtx = ctx;
-    if (ctx === 'net') {
+    if (ctx === 'net' || ctx === 'otour') {
       $('#draw-title').textContent = 'Draw offered';
       $('#draw-text').textContent = 'Your opponent offers a draw.';
       $('#draw-accept').textContent = 'Accept';
@@ -245,11 +272,46 @@
   function drawAccept() {
     closeOverlay('draw-prompt');
     if (drawCtx === 'net') { window.Net.send({ type: 'draw-accept' }); endAsDraw(); }
+    else if (drawCtx === 'otour') {
+      if (M.otour.host) hostDrawAccept(HOST_ID);
+      else window.Net.sendHost({ t: 'draw-accept' });
+    }
     else endAsDraw();
   }
   function drawDecline() {
     closeOverlay('draw-prompt');
     if (drawCtx === 'net') window.Net.send({ type: 'draw-decline' });
+    else if (drawCtx === 'otour') {
+      if (M.otour.host) hostDrawDecline(HOST_ID);
+      else window.Net.sendHost({ t: 'draw-decline' });
+    }
+  }
+
+  // ---------- tournament card (shared list rendering) ----------
+  // A short, stable discriminator so identical-looking names stay distinct.
+  function tagFor(name) {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return ('00' + h.toString(36)).slice(-3);
+  }
+  // One leaderboard/roster row: rank · name#tag · score, with an optional remove button.
+  function tRow(rank, name, score, winner, onRemove) {
+    const row = document.createElement('div');
+    row.className = 'trow' + (winner ? ' t-winner' : '');
+    const r = document.createElement('span'); r.className = 't-rank'; r.textContent = rank;
+    const nm = document.createElement('span'); nm.className = 't-name'; nm.textContent = name;
+    const tag = document.createElement('span'); tag.className = 't-tag'; tag.textContent = '#' + tagFor(name);
+    nm.appendChild(tag);
+    const sc = document.createElement('span'); sc.className = 't-score'; sc.textContent = score;
+    row.append(r, nm, sc);
+    if (onRemove) {
+      const x = document.createElement('button');
+      x.className = 't-remove'; x.textContent = '✕';
+      x.setAttribute('aria-label', 'Remove ' + name);
+      x.addEventListener('click', onRemove);
+      row.appendChild(x);
+    }
+    return row;
   }
 
   // ---------- tournament ----------
@@ -273,17 +335,7 @@
     const list = $('#tp-list');
     list.innerHTML = '';
     tourneyPlayers.forEach((n, i) => {
-      const chip = document.createElement('div');
-      chip.className = 'player-chip';
-      const span = document.createElement('span');
-      span.textContent = n;
-      const x = document.createElement('button');
-      x.className = 'chip-x';
-      x.textContent = '✕';
-      x.setAttribute('aria-label', 'Remove ' + n);
-      x.addEventListener('click', () => { tourneyPlayers.splice(i, 1); renderSetupList(); });
-      chip.append(span, x);
-      list.appendChild(chip);
+      list.appendChild(tRow(i + 1, n, 0, false, () => { tourneyPlayers.splice(i, 1); renderSetupList(); }));
     });
     const n = tourneyPlayers.length;
     $('#tp-count').textContent = n < 2 ? 'Add at least 2 players' : `${n} players · ${n * (n - 1) / 2} matches`;
@@ -299,7 +351,7 @@
       const k = Math.floor(Math.random() * (i + 1));
       [schedule[i], schedule[k]] = [schedule[k], schedule[i]];
     }
-    T = { players, schedule, current: 0 };
+    T = { players, schedule, current: 0, settings: mySettings() };
     showTournamentStandings();
   }
   function showTournamentStandings() {
@@ -309,22 +361,11 @@
   const sortRows = list => [...list].sort((a, b) => b.pts - a.pts || b.w - a.w || a.l - b.l || a.name.localeCompare(b.name));
 
   // Shared leaderboard renderer for local + online tournaments.
-  function fillLeaderboard(rows, headline, btnText, crown) {
+  function fillLeaderboard(rows, headline, btnText, crown, title) {
+    if (title) $('#ts-head').textContent = title;
     const body = $('#standings-body');
     body.innerHTML = '';
-    rows.forEach((p, rank) => {
-      const row = document.createElement('div');
-      row.className = 'lb-row' + (crown && rank === 0 ? ' lb-winner' : '');
-      for (const val of [rank + 1, p.name, p.w, p.d, p.l, p.pts]) {
-        const span = document.createElement('span');
-        span.textContent = val;
-        row.appendChild(span);
-      }
-      row.children[0].className = 'lb-rank';
-      row.children[1].className = 'lb-name';
-      row.children[5].className = 'lb-pts';
-      body.appendChild(row);
-    });
+    rows.forEach((p, rank) => body.appendChild(tRow(rank + 1, p.name, p.pts, crown && rank === 0, null)));
     $('#next-match').textContent = headline;
     const btn = $('#play-next');
     btn.hidden = !btnText;
@@ -335,7 +376,7 @@
     const done = T.current >= T.schedule.length;
     const headline = done ? `${sortRows(T.players)[0].name} takes the crown`
       : `Match ${T.current + 1} of ${T.schedule.length} — ${T.players[T.schedule[T.current][0]].name} vs ${T.players[T.schedule[T.current][1]].name}`;
-    fillLeaderboard(sortRows(T.players), headline, done ? 'New tournament' : 'Play match', done);
+    fillLeaderboard(sortRows(T.players), headline, done ? 'New tournament' : 'Play match', done, 'Local tournament');
   }
   function playNext() {
     if (T.current >= T.schedule.length) openTournamentSetup();
@@ -344,7 +385,7 @@
   function startTournamentMatch() {
     const [a, b] = T.schedule[T.current];
     M = {
-      state: R.createState(),
+      state: R.createState(T.settings.walls),
       mode: 'tournament',
       difficulty: null,
       human: [true, true],
@@ -352,12 +393,15 @@
       net: null,
       names: [T.players[a].name, T.players[b].name],
       pair: [a, b],
+      settings: T.settings,
+      clock: setupClock(T.settings),
     };
     setControls();
     drag = null;
     closeOverlay('overlay');
     showScreen('game');
     render();
+    startClock();
   }
   function endTournamentMatch(w) {
     const [a, b] = M.pair, pa = T.players[a], pb = T.players[b];
@@ -390,7 +434,7 @@
 
   // ---------- state (de)serialisation for snapshots ----------
   function serState(s) {
-    return { t: s.turn, p: s.pawns.map(x => [x.r, x.c]), w: s.walls.slice(), h: [...s.hWalls], v: [...s.vWalls], win: s.winner };
+    return { t: s.turn, p: s.pawns.map(x => [x.r, x.c]), w: s.walls.slice(), h: [...s.hWalls], v: [...s.vWalls], by: s.wallBy, win: s.winner };
   }
   function deState(o) {
     const s = R.createState();
@@ -399,8 +443,84 @@
     s.walls = o.w.slice();
     s.hWalls = new Set(o.h);
     s.vWalls = new Set(o.v);
+    s.wallBy = o.by || {};
     s.winner = o.win;
     return s;
+  }
+
+  // ---------- game settings (clock / bonus / walls) ----------
+  const SET_KEY = 'detour_settings';
+  const DEFAULTS = { time: 10, bonus: 5, walls: 10 };
+  const clampN = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+  function loadSettings() {
+    let s; try { s = JSON.parse(localStorage.getItem(SET_KEY)); } catch { /* ignore */ }
+    return { ...DEFAULTS, ...(s || {}) };
+  }
+  const saveSettings = s => { try { localStorage.setItem(SET_KEY, JSON.stringify(s)); } catch { /* ignore */ } };
+  // current values from the menu inputs, clamped
+  const mySettings = () => ({
+    time: clampN($('#set-time').value, 0, 120, DEFAULTS.time),
+    bonus: clampN($('#set-bonus').value, 0, 60, DEFAULTS.bonus),
+    walls: clampN($('#set-walls').value, 0, 20, DEFAULTS.walls),
+  });
+
+  // ---------- clock ----------
+  let clockTimer = null;
+  const setupClock = st => st.time ? { rem: [st.time * 60000, st.time * 60000], bonus: st.bonus * 1000, last: performance.now() } : null;
+  function fmtClock(ms) {
+    const t = Math.max(0, Math.ceil(ms / 1000));
+    return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+  }
+  function renderClocks() {
+    const near = $('#near-clock'), far = $('#far-clock');
+    if (!M || !M.clock) { near.hidden = true; far.hidden = true; return; }
+    const b = meIndex(), t = 1 - b;
+    near.hidden = false; far.hidden = false;
+    near.textContent = fmtClock(M.clock.rem[b]);
+    far.textContent = fmtClock(M.clock.rem[t]);
+    near.classList.toggle('low', M.clock.rem[b] <= 30000);
+    far.classList.toggle('low', M.clock.rem[t] <= 30000);
+  }
+  function startClock() {
+    stopClock();
+    if (!M || !M.clock) return;
+    M.clock.last = performance.now();
+    clockTimer = setInterval(clockStep, 200);
+  }
+  const stopClock = () => { if (clockTimer) { clearInterval(clockTimer); clockTimer = null; } };
+  function clockStep() {
+    if (!M || !M.clock) return stopClock();
+    const s = M.state;
+    if (s.winner !== null) return;
+    const now = performance.now();
+    const dt = now - M.clock.last; M.clock.last = now;
+    const p = s.turn;
+    M.clock.rem[p] = Math.max(0, M.clock.rem[p] - dt);
+    renderClocks();
+    if (M.clock.rem[p] <= 0 && clockAuthority(p)) onFlag(p);
+  }
+  function clockAuthority(p) {
+    if (M.mode === 'otour') return M.otour.host;
+    if (M.net) return M.net.myPlayer === p;
+    return true;
+  }
+  function onFlag(p) {
+    const s = M.state;
+    if (s.winner !== null) return;
+    if (M.mode === 'otour') { if (M.otour.host) hostEndMatch(1 - p); return; }
+    if (M.net) { window.Net.send({ type: 'timeout' }); s.winner = 1 - p; showWin('You lost on time', 'Your clock ran out.'); return; }
+    s.winner = 1 - p;
+    if (M.mode === 'tournament') return endTournamentMatch(1 - p);
+    if (M.mode === 'local') return showWin(`${nameOf(1 - p)} wins`, `${nameOf(p)} ran out of time.`);
+    recordResult(p === 1);
+    showWin(p === 0 ? 'You lose on time' : 'You win on time', p === 0 ? 'Your clock ran out.' : 'The bot ran out of time.');
+  }
+  // add the increment to whoever just moved, then hand the clock over
+  function clockOnAction(actor, fromRemote, action) {
+    if (!M.clock) return;
+    if (!fromRemote) M.clock.rem[actor] += M.clock.bonus;
+    else if (action && action.clk != null) M.clock.rem[actor] = action.clk;
+    M.clock.last = performance.now();
   }
 
   // ---------- online tournament: entry + lobby ----------
@@ -431,7 +551,7 @@
   async function otourJoin() {
     const code = $('#ote-code').value.trim().toUpperCase();
     if (code.length < 4) { $('#ote-status').textContent = 'Enter the 4-character code.'; return; }
-    OT = { host: false, names: [] };
+    OT = { host: false, names: [], code };
     $('#ote-create').disabled = true; $('#ote-join').disabled = true;
     $('#ote-status').textContent = 'Connecting…';
     try { await window.Net.joinHub(code, onClientEvent); }
@@ -444,21 +564,13 @@
   }
   function renderLobby() {
     const host = OT && OT.host;
-    $('#otl-code-wrap').hidden = !host;
-    if (host) $('#otl-code').textContent = OT.code || '----';
+    $('#otl-code').textContent = (OT && OT.code) || '----';
     $('#otl-start').hidden = !host;
 
     const names = host ? OT.roster.map(p => p.name) : (OT.names || []);
     const list = $('#otl-roster');
     list.innerHTML = '';
-    names.forEach(n => {
-      const chip = document.createElement('div');
-      chip.className = 'player-chip';
-      const span = document.createElement('span');
-      span.textContent = n;
-      chip.appendChild(span);
-      list.appendChild(chip);
-    });
+    names.forEach((n, i) => list.appendChild(tRow(i + 1, n, 0, false, null)));
     if (host) {
       $('#otl-start').disabled = names.length < 2;
       $('#otl-status').textContent = names.length < 2 ? 'Waiting for players to join…' : `${names.length} players ready`;
@@ -467,6 +579,7 @@
     }
   }
   function leaveOtour() {
+    stopClock();
     window.Net.close();
     OT = null; M = null;
     closeOverlay('overlay'); closeOverlay('draw-prompt');
@@ -489,6 +602,9 @@
       renderLobby();
     } else if (msg.t === 'action') hostApplyAction(msg.action, id);
     else if (msg.t === 'forfeit') hostForfeit(id);
+    else if (msg.t === 'draw-offer') hostDrawOffer(id);
+    else if (msg.t === 'draw-accept') hostDrawAccept(id);
+    else if (msg.t === 'draw-decline') hostDrawDecline(id);
   }
   function broadcastLobby() { window.Net.broadcast({ t: 'lobby', names: OT.roster.map(p => p.name) }); }
 
@@ -511,6 +627,7 @@
 
   function hostStartTournament() {
     if (!OT || !OT.host || OT.roster.length < 2) return;
+    OT.settings = mySettings();
     OT.players = OT.roster.map(p => ({ id: p.id, name: p.name, w: 0, d: 0, l: 0, pts: 0, left: false }));
     OT.schedule = [];
     for (let i = 0; i < OT.players.length; i++)
@@ -539,19 +656,24 @@
   }
 
   function hostBeginMatch(ai, bi) {
-    OT.G = R.createState();
+    OT.G = R.createState(OT.settings.walls);
+    OT.clock = setupClock(OT.settings);
     OT.pair = [ai, bi];
+    OT.drawOffer = null;
     const pa = OT.players[ai], pb = OT.players[bi];
+    const clk = OT.clock ? OT.clock.rem.slice() : null;
     OT.players.forEach(p => {
       if (p.id === HOST_ID) return;
       const role = p.id === pa.id ? 'a' : p.id === pb.id ? 'b' : 'spec';
-      window.Net.sendTo(p.id, { t: 'start', a: pa.name, b: pb.name, role, matchNo: OT.current + 1, total: OT.schedule.length });
+      window.Net.sendTo(p.id, { t: 'start', a: pa.name, b: pb.name, role, matchNo: OT.current + 1, total: OT.schedule.length, clk });
     });
     const hostRole = pa.id === HOST_ID ? 'a' : pb.id === HOST_ID ? 'b' : 'spec';
-    setupOtourMatch(hostRole, pa.name, pb.name, true);
+    setupOtourMatch(hostRole, pa.name, pb.name, true, clk);
     M.state = OT.G;
-    window.Net.broadcast({ t: 'state', s: serState(OT.G) });
+    M.clock = OT.clock;   // host ticks the authoritative clock
+    window.Net.broadcast({ t: 'state', s: serState(OT.G), clk: OT.clock ? OT.clock.rem : null });
     render();
+    startClock();
   }
 
   function hostApplyAction(action, fromId) {
@@ -559,9 +681,11 @@
     const s = OT.G, [ai, bi] = OT.pair;
     const expect = s.turn === 0 ? OT.players[ai].id : OT.players[bi].id;
     if (fromId !== expect) return;
+    const actor = s.turn;
     if (action.type === 'wall') { if (!R.canPlaceWall(s, s.turn, action.orient, action.r, action.c)) return; R.applyWall(s, action.orient, action.r, action.c); }
     else { if (!R.legalMoves(s, s.turn).some(m => m.r === action.to.r && m.c === action.to.c)) return; R.applyMove(s, action.to); }
-    window.Net.broadcast({ t: 'state', s: serState(s) });
+    if (OT.clock) { OT.clock.rem[actor] += OT.clock.bonus; OT.clock.last = performance.now(); }
+    window.Net.broadcast({ t: 'state', s: serState(s), clk: OT.clock ? OT.clock.rem : null });
     if (M && M.mode === 'otour' && M.otour.host) render();
     if (s.winner !== null) hostEndMatch(s.winner);
   }
@@ -571,6 +695,43 @@
     const slot = fromId === OT.players[ai].id ? 0 : fromId === OT.players[bi].id ? 1 : -1;
     if (slot < 0) return;
     hostEndMatch(1 - slot);
+  }
+  // ---- online-tournament draws: offer → opponent agrees → host ends the match ----
+  function hostDrawOffer(fromId) {
+    if (!OT || !OT.host || !OT.G || OT.G.winner !== null || !OT.pair) return;
+    const [ai, bi] = OT.pair;
+    const slot = fromId === OT.players[ai].id ? 0 : fromId === OT.players[bi].id ? 1 : -1;
+    if (slot < 0) return;
+    OT.drawOffer = slot;
+    const otherId = OT.players[slot === 0 ? bi : ai].id;
+    if (otherId === HOST_ID) openDrawPrompt('otour');   // host is the opponent — prompt locally
+    else window.Net.sendTo(otherId, { t: 'draw-offer' });
+  }
+  function hostDrawAccept(fromId) {
+    if (!OT || !OT.host || !OT.G || OT.G.winner !== null || OT.drawOffer == null || !OT.pair) return;
+    const [ai, bi] = OT.pair;
+    const slot = fromId === OT.players[ai].id ? 0 : fromId === OT.players[bi].id ? 1 : -1;
+    if (slot < 0 || slot === OT.drawOffer) return;      // only the offerer's opponent can accept
+    OT.drawOffer = null;
+    hostEndDraw();
+  }
+  function hostDrawDecline(fromId) {
+    if (!OT || !OT.host || OT.drawOffer == null || !OT.pair) return;
+    const [ai, bi] = OT.pair;
+    const offererId = OT.players[OT.drawOffer === 0 ? ai : bi].id;
+    OT.drawOffer = null;
+    if (offererId === HOST_ID) toast('Draw declined');
+    else window.Net.sendTo(offererId, { t: 'draw-declined' });
+  }
+  function hostEndDraw() {
+    const [ai, bi] = OT.pair;
+    OT.players[ai].d++; OT.players[bi].d++; OT.players[ai].pts++; OT.players[bi].pts++;
+    OT.current++;
+    OT.G = null;
+    const done = OT.current >= OT.schedule.length;
+    const rows = sortRows(OT.players);
+    window.Net.broadcast({ t: 'result', draw: true, rows, done });
+    showWin('Draw', done ? 'Final match done.' : 'On to the next match.');
   }
   function hostEndMatch(winSlot) {
     const [ai, bi] = OT.pair;
@@ -592,7 +753,7 @@
     const done = OT.current >= OT.schedule.length;
     const headline = done ? `${sortRows(OT.players)[0].name} takes the crown`
       : `Match ${OT.current + 1} of ${OT.schedule.length} — ${OT.players[OT.schedule[OT.current][0]].name} vs ${OT.players[OT.schedule[OT.current][1]].name}`;
-    fillLeaderboard(sortRows(OT.players), headline, done ? 'Back to menu' : 'Play next match', done);
+    fillLeaderboard(sortRows(OT.players), headline, done ? 'Back to menu' : 'Play next match', done, 'Online tournament');
     showScreen('tournament-standings');
   }
   function hostPlayNext() {
@@ -605,30 +766,46 @@
     if (ev.type === 'open') { window.Net.sendHost({ t: 'hello', name: myName() }); showLobby(); }
     else if (ev.type === 'data') clientOnData(ev.msg);
     else if (ev.type === 'close') { toast('Disconnected from host'); leaveOtour(); }
-    else if (ev.type === 'error') { $('#ote-status').textContent = 'Could not connect. Check the code.'; OT = null; $('#ote-create').disabled = false; $('#ote-join').disabled = false; }
+    else if (ev.type === 'error') {
+      const t = ev.err && ev.err.type;
+      $('#ote-status').textContent = t === 'peer-unavailable' ? 'No tournament with that code.'
+        : t === 'timeout' ? "Couldn't connect — your network is likely blocking it. Try another network or a hotspot."
+          : 'Could not connect. Check the code.';
+      OT = null; $('#ote-create').disabled = false; $('#ote-join').disabled = false;
+    }
   }
   function clientOnData(msg) {
     if (!OT || OT.host) return;
     if (msg.t === 'lobby') { OT.names = msg.names; if ($('#otour-lobby').classList.contains('is-active')) renderLobby(); }
     else if (msg.t === 'too-late') { toast('Tournament already started'); leaveOtour(); }
     else if (msg.t === 'start') {
-      setupOtourMatch(msg.role, msg.a, msg.b, false);
+      setupOtourMatch(msg.role, msg.a, msg.b, false, msg.clk);
       render();
+      startClock();
     } else if (msg.t === 'state') {
-      if (M && M.mode === 'otour') { M.state = deState(msg.s); render(); }
+      if (M && M.mode === 'otour') {
+        M.state = deState(msg.s);
+        if (M.clock && msg.clk) { M.clock.rem = msg.clk.slice(); M.clock.last = performance.now(); }
+        render();
+      }
+    } else if (msg.t === 'draw-offer') {
+      if (M && M.mode === 'otour' && M.playing) openDrawPrompt('otour');
+    } else if (msg.t === 'draw-declined') {
+      toast('Draw declined');
     } else if (msg.t === 'result') {
       OT.lastRows = msg.rows; OT.done = msg.done;
-      showWin(msg.done ? `${msg.winner} takes the crown` : `${msg.winner} wins`, msg.done ? 'Tournament over.' : 'Updating standings…');
+      if (msg.draw) showWin('Draw', msg.done ? 'Tournament over.' : 'Updating standings…');
+      else showWin(msg.done ? `${msg.winner} takes the crown` : `${msg.winner} wins`, msg.done ? 'Tournament over.' : 'Updating standings…');
     }
   }
   function showClientStandings() {
     const rows = (OT && OT.lastRows) || [];
     const headline = OT && OT.done ? `${rows[0] ? rows[0].name : ''} takes the crown` : 'Waiting for the host…';
-    fillLeaderboard(rows, headline, OT && OT.done ? 'Back to menu' : '', OT && OT.done);
+    fillLeaderboard(rows, headline, OT && OT.done ? 'Back to menu' : '', OT && OT.done, 'Online tournament');
     showScreen('tournament-standings');
   }
 
-  function setupOtourMatch(role, aName, bName, host) {
+  function setupOtourMatch(role, aName, bName, host, clk) {
     M = {
       state: R.createState(),
       mode: 'otour',
@@ -638,6 +815,7 @@
       seat: role === 'b' ? 1 : 0,
       playing: role === 'a' || role === 'b',
       names: [aName, bName],
+      clock: clk ? { rem: clk.slice(), bonus: 0, last: performance.now() } : null,
     };
     setControls();
     drag = null;
@@ -708,32 +886,34 @@
     }
 
     renderRails();
+    renderClocks();
     updateStatus();
   }
 
   function addWall(k, orient) {
     const [r, c] = k.split(',').map(Number);
+    const owner = M.state.wallBy[orient + k];
     const w = document.createElement('div');
-    w.className = 'wall';
+    w.className = 'wall ' + (owner === meIndex() ? 'mine' : 'opp');
     if (orient === 'h') gridPos(w, 2 * r + 2, 2 * c + 1, 1, 3);
     else gridPos(w, 2 * r + 1, 2 * c + 2, 3, 1);
     boardEl.appendChild(w);
   }
 
   function renderRails() {
-    const s = M.state, near = meIndex(), far = 1 - near;
-    $('#near-name').textContent = nameOf(near);
-    $('#far-name').textContent = nameOf(far);
-    $('#near-count').textContent = s.walls[near];
-    $('#far-count').textContent = s.walls[far];
-    renderWalls($('#inventory'), near, true);
-    renderWalls($('#opp-inventory'), far, false);
+    const s = M.state, bottom = meIndex(), top = 1 - bottom;
+    $('#near-name').textContent = nameOf(bottom);
+    $('#far-name').textContent = nameOf(top);
+    $('#near-count').textContent = s.walls[bottom];
+    $('#far-count').textContent = s.walls[top];
+    const bottomDrag = interactive() && bottom === s.turn;
+    const topDrag = interactive() && top === s.turn;  // local hotseat: the player to move drags from their own rail
+    renderWalls($('#inventory'), bottom, bottomDrag);
+    renderWalls($('#opp-inventory'), top, topDrag);
     $('#orient-label').textContent = M.orient === 'h' ? 'Horizontal' : 'Vertical';
-    $('#rail-top').classList.toggle('active', far === s.turn);
-    $('#tray').classList.toggle('active', near === s.turn);
-    const canPlace = interactive() && s.walls[near] > 0;
-    $('#tray').classList.toggle('disabled', !canPlace);
-    $('#tray-hint').style.visibility = canPlace ? 'visible' : 'hidden';
+    $('#rail-top').classList.toggle('active', top === s.turn);
+    $('#tray').classList.toggle('active', bottom === s.turn);
+    $('#tray-hint').style.visibility = (bottomDrag || topDrag) && s.walls[s.turn] > 0 ? 'visible' : 'hidden';
   }
 
   function renderWalls(container, owner, draggable) {
@@ -742,8 +922,8 @@
     const color = owner === meIndex() ? 'mine' : 'opp';
     for (let i = 0; i < s.walls[owner]; i++) {
       const tok = document.createElement('div');
-      tok.className = 'wtoken ' + color + (draggable && M.orient === 'v' ? ' vert' : '');
-      if (draggable && interactive()) tok.addEventListener('pointerdown', startDrag);
+      tok.className = 'wtoken ' + color + (draggable ? ' grab' : '') + (draggable && M.orient === 'v' ? ' vert' : '');
+      if (draggable) tok.addEventListener('pointerdown', startDrag);
       container.appendChild(tok);
     }
   }
@@ -762,7 +942,8 @@
   function placePreview(orient, r, c, ok) {
     if (orient === 'h') gridPos(previewEl, 2 * r + 2, 2 * c + 1, 1, 3);
     else gridPos(previewEl, 2 * r + 1, 2 * c + 2, 3, 1);
-    previewEl.className = 'preview ' + (ok ? 'ok' : 'bad');
+    const who = M.state.turn === meIndex() ? 'mine' : 'opp';
+    previewEl.className = 'preview ' + (ok ? 'ok ' + who : 'bad');
     previewEl.style.display = '';
   }
   const hidePreview = () => { if (previewEl) previewEl.style.display = 'none'; };
@@ -791,7 +972,7 @@
     const cell = boardEl.querySelector('.cell').getBoundingClientRect().width;
     const span = cell * 2.22;
     const ghost = document.createElement('div');
-    ghost.className = 'drag-ghost';
+    ghost.className = 'drag-ghost ' + (M.state.turn === meIndex() ? 'mine' : 'opp');
     ghost.style.width = (M.orient === 'h' ? span : cell * 0.26) + 'px';
     ghost.style.height = (M.orient === 'h' ? cell * 0.26 : span) + 'px';
     document.body.appendChild(ghost);
@@ -826,6 +1007,7 @@
   // ---------- online (friend room code) ----------
   function openOnline() {
     pendingRole = null;
+    $('#online-choice').hidden = false;
     $('#room-display').hidden = true;
     $('#online-status').textContent = '';
     $('#join-code').value = '';
@@ -839,13 +1021,14 @@
   function onNetEvent(ev) {
     switch (ev.type) {
       case 'open':
-        startNetMatch(pendingRole, pendingRole === 'host' ? 0 : 1);
+        // the host fixes the settings and sends them; the guest waits for that config
+        if (pendingRole === 'host') { const st = mySettings(); window.Net.send({ type: 'config', settings: st }); startNetMatch('host', 0, st); }
         break;
       case 'data':
         handleNetData(ev.msg);
         break;
       case 'close':
-        if (M && M.mode === 'net') { M.net.connected = false; closeOverlay('overlay'); showScreen('menu'); toast('Opponent disconnected'); }
+        if (M && M.mode === 'net') { M.net.connected = false; stopClock(); closeOverlay('overlay'); showScreen('menu'); toast('Opponent disconnected'); }
         break;
       case 'error':
         handleNetError(ev.err);
@@ -858,17 +1041,23 @@
     let msg = 'Connection error.';
     if (t === 'peer-unavailable') msg = 'No room with that code.';
     else if (t === 'unavailable-id') msg = 'Room code clash — try again.';
+    else if (t === 'timeout') msg = "Couldn't connect — your network is likely blocking it. Try another network or a phone hotspot.";
     else if (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') msg = 'Could not reach the server.';
     if (M && M.mode === 'net') toast(msg);
     else { resetOnlineButtons(); setOnlineStatus(msg); }
   }
 
   function handleNetData(msg) {
+    if (msg.type === 'config') { startNetMatch('guest', 1, msg.settings); return; }
     if (!M || M.mode !== 'net') return;
     const s = M.state;
     if (msg.type === 'rematch') return startNetMatch(M.net.role, M.net.myPlayer);
     if (msg.type === 'forfeit') {
       if (s.winner === null) { s.winner = M.net.myPlayer; showWin('You win', 'Opponent forfeited.'); }
+      return;
+    }
+    if (msg.type === 'timeout') {
+      if (s.winner === null) { s.winner = M.net.myPlayer; showWin('You win', 'Opponent ran out of time.'); }
       return;
     }
     if (msg.type === 'draw-offer') { if (s.winner === null) openDrawPrompt('net'); return; }
@@ -888,6 +1077,7 @@
     try {
       const code = await window.Net.host(onNetEvent);
       $('#room-code').textContent = code;
+      $('#online-choice').hidden = true;        // host a duel like a tournament: no "join" once you've created
       $('#room-display').hidden = false;
       setOnlineStatus('Share this code. Waiting for your opponent…');
     } catch {
@@ -988,6 +1178,12 @@
   const nameInput = $('#player-name');
   nameInput.value = loadName();
   nameInput.addEventListener('input', () => { const v = nameInput.value.trim(); if (v) saveName(v); });
+
+  const st = loadSettings();
+  $('#set-time').value = st.time;
+  $('#set-bonus').value = st.bonus;
+  $('#set-walls').value = st.walls;
+  ['#set-time', '#set-bonus', '#set-walls'].forEach(id => $(id).addEventListener('change', () => saveSettings(mySettings())));
 
   renderRecords();
 })();

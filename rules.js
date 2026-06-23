@@ -12,14 +12,15 @@
   const key = (r, c) => r + ',' + c;
   const inBounds = (r, c) => r >= 0 && r < SIZE && c >= 0 && c < SIZE;
 
-  function createState() {
+  function createState(wallCount = WALL_MAX) {
     return {
       turn: 0,
       pawns: [{ r: SIZE - 1, c: 4 }, { r: 0, c: 4 }],
       goalRow: [0, SIZE - 1],
-      walls: [WALL_MAX, WALL_MAX],
+      walls: [wallCount, wallCount],
       hWalls: new Set(),
       vWalls: new Set(),
+      wallBy: {},   // "<orient><r>,<c>" -> player who placed it
       winner: null,
     };
   }
@@ -32,6 +33,7 @@
       walls: s.walls.slice(),
       hWalls: new Set(s.hWalls),
       vWalls: new Set(s.vWalls),
+      wallBy: { ...s.wallBy },
       winner: s.winner,
     };
   }
@@ -134,6 +136,7 @@
   function applyWall(s, orient, r, c) {
     const p = s.turn;
     (orient === 'h' ? s.hWalls : s.vWalls).add(key(r, c));
+    s.wallBy[orient + key(r, c)] = p;
     s.walls[p] -= 1;
     s.turn = 1 - p;
     return s;

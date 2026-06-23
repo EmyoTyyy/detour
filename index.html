@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <canvas id="bg" aria-hidden="true"></canvas>
   <main id="app">
     <!-- Menu -->
     <section id="menu" class="screen is-active">
@@ -23,6 +24,12 @@
       <div class="name-field">
         <label for="player-name">Your name</label>
         <input id="player-name" class="text-input" maxlength="16" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="settings-row">
+        <label class="setting"><span>Clock (min)</span><input id="set-time" class="num-input" type="number" min="0" max="120" step="1" /></label>
+        <label class="setting"><span>Bonus (sec)</span><input id="set-bonus" class="num-input" type="number" min="0" max="60" step="1" /></label>
+        <label class="setting"><span>Walls</span><input id="set-walls" class="num-input" type="number" min="0" max="20" step="1" /></label>
       </div>
 
       <div class="menu-groups">
@@ -101,19 +108,21 @@
     </section>
 
     <!-- Online (friend room code) -->
-    <section id="online" class="screen">
-      <header class="hud">
-        <button class="icon-btn" id="online-back" title="Back to menu" aria-label="Back to menu">‹</button>
-        <div class="online-head">Play with a Friend</div>
-        <span class="hud-spacer"></span>
-      </header>
+    <section id="online" class="screen sheet">
+      <button class="back-btn" id="online-back" aria-label="Back to menu">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>Back</span>
+      </button>
       <div class="online-panel">
-        <button class="btn primary big" id="create-room">Create a room</button>
-        <div class="online-or">or</div>
-        <div class="join-row">
-          <input id="join-code" class="code-input" placeholder="CODE" maxlength="4"
-                 autocomplete="off" autocapitalize="characters" spellcheck="false" />
-          <button class="btn" id="join-room">Join</button>
+        <h2 class="panel-title">Play with a Friend</h2>
+        <div id="online-choice">
+          <button class="btn primary big" id="create-room">Create a room</button>
+          <div class="online-or">or</div>
+          <div class="join-row">
+            <input id="join-code" class="code-input" placeholder="CODE" maxlength="4"
+                   autocomplete="off" autocapitalize="characters" spellcheck="false" />
+            <button class="btn" id="join-room">Join</button>
+          </div>
         </div>
         <div id="room-display" hidden>
           <div class="room-label">Share this code</div>
@@ -125,13 +134,13 @@
     </section>
 
     <!-- Online tournament: entry -->
-    <section id="otour-entry" class="screen">
-      <header class="hud">
-        <button class="icon-btn" id="ote-back" title="Back to menu" aria-label="Back to menu">‹</button>
-        <div class="online-head">Online Tournament</div>
-        <span class="hud-spacer"></span>
-      </header>
+    <section id="otour-entry" class="screen sheet">
+      <button class="back-btn" id="ote-back" aria-label="Back to menu">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>Back</span>
+      </button>
       <div class="online-panel">
+        <h2 class="panel-title">Online tournament</h2>
         <p class="panel-lead">Host a room and share the code, or join a friend's. Everyone plays everyone; whoever isn't playing watches live.</p>
         <button class="btn primary big" id="ote-create">Create a tournament</button>
         <div class="online-or">or</div>
@@ -143,32 +152,34 @@
       </div>
     </section>
 
-    <!-- Online tournament: lobby -->
-    <section id="otour-lobby" class="screen">
-      <header class="hud">
-        <button class="icon-btn" id="otl-back" title="Leave" aria-label="Leave">‹</button>
-        <div class="online-head">Lobby</div>
-        <span class="hud-spacer"></span>
-      </header>
-      <div class="online-panel">
-        <div id="otl-code-wrap" hidden>
-          <div class="room-label">Room code</div>
-          <div class="room-code" id="otl-code">----</div>
+    <!-- Online tournament: lobby (card) -->
+    <section id="otour-lobby" class="screen sheet">
+      <button class="back-btn" id="otl-back" aria-label="Leave">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>Back</span>
+      </button>
+      <div class="tcard">
+        <div class="tcard-head">Online tournament</div>
+        <div class="tcard-list" id="otl-roster"></div>
+        <div class="tcard-foot">
+          <div class="tjoin"><span class="tjoin-label">Join</span><span class="tjoin-code" id="otl-code">----</span></div>
+          <div class="tcard-note" id="otl-status"></div>
+          <button class="btn primary big" id="otl-start" hidden disabled>Start tournament</button>
         </div>
-        <div class="player-list" id="otl-roster"></div>
-        <div class="online-status" id="otl-status"></div>
-        <button class="btn primary big" id="otl-start" hidden disabled>Start tournament</button>
       </div>
     </section>
 
     <!-- Game -->
     <section id="game" class="screen">
       <header class="hud">
-        <button class="icon-btn" id="back-btn" title="Back to menu" aria-label="Back to menu">‹</button>
+        <button class="back-btn" id="back-btn" aria-label="Back to menu">
+          <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+          <span>Back</span>
+        </button>
         <div class="status" id="status">Your turn</div>
         <button class="icon-btn" id="restart-btn" title="Restart" aria-label="Restart">↺</button>
         <button class="icon-btn" id="draw-btn" title="Offer a draw" aria-label="Offer a draw" hidden>½</button>
-        <button class="icon-btn forfeit-btn" id="forfeit-btn" title="Forfeit" aria-label="Forfeit" hidden>⚑</button>
+        <button class="icon-btn forfeit-btn" id="forfeit-btn" title="Resign" aria-label="Resign" hidden>⚑</button>
       </header>
 
       <div class="rail rail-top" id="rail-top">
@@ -176,6 +187,7 @@
         <span class="rail-name" id="far-name">Opponent</span>
         <span class="rail-count" id="far-count">10</span>
         <div class="rail-walls" id="opp-inventory" aria-hidden="true"></div>
+        <span class="rail-clock" id="far-clock" hidden>10:00</span>
       </div>
 
       <div class="board-wrap">
@@ -191,43 +203,44 @@
           <span class="rotate-glyph">⤡</span>
           <span id="orient-label">Horizontal</span>
         </button>
+        <span class="rail-clock" id="near-clock" hidden>10:00</span>
       </div>
       <div class="tray-hint" id="tray-hint">drag a wall onto the board to block</div>
     </section>
 
-    <!-- Tournament setup -->
-    <section id="tournament-setup" class="screen">
-      <header class="hud">
-        <button class="icon-btn" id="tp-back" title="Back to menu" aria-label="Back to menu">‹</button>
-        <div class="online-head">Tournament</div>
-        <span class="hud-spacer"></span>
-      </header>
-      <div class="online-panel">
-        <p class="panel-lead">Add players, then everyone plays everyone in pass-and-play. The leaderboard updates between matches.</p>
-        <div class="join-row">
-          <input id="tp-name" class="text-input" placeholder="Player name" maxlength="16" autocomplete="off" />
-          <button class="btn" id="tp-add">Add</button>
+    <!-- Tournament setup (card) -->
+    <section id="tournament-setup" class="screen sheet">
+      <button class="back-btn" id="tp-back" aria-label="Back to menu">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>Back</span>
+      </button>
+      <div class="tcard">
+        <div class="tcard-head">Local tournament</div>
+        <div class="tcard-list" id="tp-list"></div>
+        <div class="tcard-foot">
+          <div class="tadd-row">
+            <input id="tp-name" class="text-input" placeholder="Player name" maxlength="16" autocomplete="off" />
+            <button class="btn" id="tp-add">Add player +</button>
+          </div>
+          <div class="tcard-note" id="tp-count">Add at least 2 players</div>
+          <button class="btn primary big" id="tp-start" disabled>Start tournament</button>
         </div>
-        <div class="player-list" id="tp-list"></div>
-        <div class="online-status" id="tp-count">Add at least 2 players</div>
-        <button class="btn primary big" id="tp-start" disabled>Start tournament</button>
       </div>
     </section>
 
-    <!-- Tournament standings -->
-    <section id="tournament-standings" class="screen">
-      <header class="hud">
-        <button class="icon-btn" id="ts-back" title="Back to menu" aria-label="Back to menu">‹</button>
-        <div class="online-head">Standings</div>
-        <span class="hud-spacer"></span>
-      </header>
-      <div class="standings-panel">
-        <div class="leaderboard">
-          <div class="lb-head"><span class="lb-rank">#</span><span class="lb-name">Player</span><span>W</span><span>D</span><span>L</span><span class="lb-pts">Pts</span></div>
-          <div id="standings-body"></div>
+    <!-- Tournament standings (card) -->
+    <section id="tournament-standings" class="screen sheet">
+      <button class="back-btn" id="ts-back" aria-label="Back to menu">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>Back</span>
+      </button>
+      <div class="tcard">
+        <div class="tcard-head" id="ts-head">Tournament</div>
+        <div class="tcard-list" id="standings-body"></div>
+        <div class="tcard-foot">
+          <div class="tcard-note" id="next-match"></div>
+          <button class="btn primary big" id="play-next">Play match</button>
         </div>
-        <div class="next-match" id="next-match"></div>
-        <button class="btn primary big" id="play-next">Play match</button>
       </div>
     </section>
 
@@ -271,7 +284,7 @@
             <span class="diff-rec" data-record="medium"></span>
           </button>
           <button class="diff-btn" data-diff="hard">
-            <span class="diff-main"><span class="diff-name">Hard</span><span class="diff-sub">Reads both paths, walls for tempo</span></span>
+            <span class="diff-main"><span class="diff-name">Hard</span><span class="diff-sub">Expert engine — searches ahead, plays to win</span></span>
             <span class="diff-rec" data-record="hard"></span>
           </button>
         </div>
@@ -301,6 +314,7 @@
     <div id="toast" class="toast"></div>
   </main>
 
+  <script src="bg.js"></script>
   <script src="rules.js"></script>
   <script src="bot.js"></script>
   <script src="net.js"></script>

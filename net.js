@@ -7,8 +7,32 @@
   const LIB = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
   const PREFIX = 'detour-room-';
   const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no I/O/0/1
+  const CONNECT_TIMEOUT = 20000;
+
+  // STUN finds a direct path for most peers; TURN relays the rest (symmetric NATs,
+  // strict mobile/corporate networks) — without it those connections fail silently.
+  // Open Relay is a free public TURN; swap in your own keys for production reliability.
+  const PEER_OPTS = {
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+      ],
+    },
+  };
+
   let peer = null, conn = null, cb = null, libPromise = null;
   const conns = new Map(); // hub: peerId -> DataConnection
+
+  // Surface a timeout if a data channel never opens (the usual silent-NAT failure).
+  function withTimeout(c, onFail) {
+    const t = setTimeout(() => { if (!c.open) onFail(); }, CONNECT_TIMEOUT);
+    c.on('open', () => clearTimeout(t));
+    c.on('error', () => clearTimeout(t));
+    c.on('close', () => clearTimeout(t));
+  }
 
   function ensureLib() {
     if (window.Peer) return Promise.resolve();
@@ -41,7 +65,7 @@
       let tries = 0;
       const make = () => {
         const code = genCode();
-        peer = new Peer(PREFIX + code);
+        peer = new Peer(PREFIX + code, PEER_OPTS);
         peer.on('open', () => resolve(code));
         peer.on('connection', c => { if (conn) { c.close(); return; } bind(c); });
         peer.on('error', e => {
@@ -57,8 +81,13 @@
     await ensureLib();
     cb = onEvent;
     return new Promise((resolve, reject) => {
-      peer = new Peer();
-      peer.on('open', () => { bind(peer.connect(PREFIX + code.toUpperCase(), { reliable: true })); resolve(); });
+      peer = new Peer(undefined, PEER_OPTS);
+      peer.on('open', () => {
+        const c = peer.connect(PREFIX + code.toUpperCase(), { reliable: true });
+        bind(c);
+        withTimeout(c, () => cb && cb({ type: 'error', err: { type: 'timeout' } }));
+        resolve();
+      });
       peer.on('error', e => { cb && cb({ type: 'error', err: e }); reject(e); });
     });
   }
@@ -73,7 +102,7 @@
       let tries = 0;
       const make = () => {
         const code = genCode();
-        peer = new Peer(PREFIX + code);
+        peer = new Peer(PREFIX + code, PEER_OPTS);
         peer.on('open', () => resolve(code));
         peer.on('connection', c => {
           c.on('open', () => { conns.set(c.peer, c); cb && cb({ type: 'connect', id: c.peer }); });
@@ -96,13 +125,14 @@
     await ensureLib();
     cb = onEvent;
     return new Promise((resolve, reject) => {
-      peer = new Peer();
+      peer = new Peer(undefined, PEER_OPTS);
       peer.on('open', () => {
         conn = peer.connect(PREFIX + code.toUpperCase(), { reliable: true });
         conn.on('open', () => cb && cb({ type: 'open' }));
         conn.on('data', d => cb && cb({ type: 'data', msg: d }));
         conn.on('close', () => cb && cb({ type: 'close' }));
         conn.on('error', e => cb && cb({ type: 'error', err: e }));
+        withTimeout(conn, () => cb && cb({ type: 'error', err: { type: 'timeout' } }));
         resolve();
       });
       peer.on('error', e => { cb && cb({ type: 'error', err: e }); reject(e); });

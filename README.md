@@ -13,7 +13,7 @@ No build, no server, no dependencies. Open `index.html` in a browser (double-cli
 - **vs Bot** — pick a difficulty:
   - *Easy* — moves at random.
   - *Medium* — races forward, walls when it slips behind.
-  - *Hard* — tracks both shortest paths and walls for tempo.
+  - *Hard* — an expert engine: negamax search with alpha-beta pruning and iterative deepening (a ~0.7s budget per move), a shortest-path-difference evaluation, and wall candidates pruned to the opponent's shortest-path corridor. It looks several moves ahead, walls for tempo, and races to close out a won position — it will comfortably beat the easier bots and most humans.
 - **Freeplay** — two players, one device (hotseat).
 - **Tournament** (local) — round-robin: add named players, everyone plays everyone in pass-and-play, with a leaderboard between matches (win 3 pts, draw 1).
 - **Play with a Friend** — online 1v1 over a room code (needs internet).
@@ -21,9 +21,15 @@ No build, no server, no dependencies. Open `index.html` in a browser (double-cli
 
 The bot, freeplay, and local-tournament modes are fully offline. LAN play, LAN tournaments, random matchmaking, and ranked are placeholders (*Soon*).
 
-### Your name
+### Your name & game settings
 
-The menu has a name field. It defaults to `Player-XXXX` (a random suffix, persisted in `localStorage`) so two people rarely collide, and is the name shown in online tournaments. Edit it any time.
+The menu has a **name** field (defaults to `Player-XXXX`, a random persisted suffix, so two people rarely collide — it's the name shown in online tournaments) and three game settings:
+
+- **Clock** — minutes per player (default 10; `0` turns the clock off).
+- **Bonus** — seconds added to your clock after each move (default 5).
+- **Walls** — walls per player (default 10).
+
+These apply to whatever you start next. For online games the **host's** settings are used for everyone (sent on connect); for tournaments the settings are fixed when the bracket starts. Each player has a chess clock shown in their rail; running out of time loses the game (or the match, in a tournament).
 
 ### Online tournament (host-as-hub)
 
@@ -31,16 +37,16 @@ No game server: the **host's browser is the hub**. Other players connect to it o
 
 - **The host must stay connected** — if the host leaves, the tournament ends for everyone (no host migration).
 - A player who **forfeits** concedes the current match but stays in; a player who **disconnects** is auto-forfeited from their remaining matches so the bracket keeps moving.
-- Needs internet (the PeerJS broker) and a non-strict NAT, same caveats as friend play. A truly offline LAN tournament still needs a local hub server.
+- Needs internet (the PeerJS broker). Connections use STUN plus a free public **TURN** relay (Open Relay) so peers behind strict/symmetric NATs can still connect; if a connection still can't be made within ~20s the player gets a clear "couldn't connect" message instead of a silent hang. For heavy use, swap in your own TURN credentials in `net.js` (`PEER_OPTS`). A truly offline LAN tournament still needs a local hub server.
 
 ## Online play
 
-"Play with a Friend" connects two browsers peer-to-peer over WebRTC. One player **creates a room** and shares the 4-character code; the other **joins** with it. There is no game server: both browsers run the same rules and exchange only the action taken each turn (deterministic lockstep), so they stay in sync.
+"Play with a Friend" connects two browsers peer-to-peer over WebRTC. One player **creates a room** and shares the 4-character code; the other **joins** with it. Once you create a room the join field disappears (you're the host now, waiting on an opponent — same flow as hosting a tournament). There is no game server: both browsers run the same rules and exchange only the action taken each turn (deterministic lockstep), so they stay in sync.
 
 - Signaling uses the free public **PeerJS** broker, lazy-loaded from a CDN only when you open the online screen — the offline modes never touch the network.
 - Each player sees themselves as **blue at the bottom** and the opponent as **orange at the top**; the board is rotated 180° for the guest so both play "upward." The host still moves first.
 - Online games show a **Forfeit** flag (turns red on hover) instead of Restart — forfeiting hands the win to your opponent.
-- A small fraction of networks (strict NAT) may fail to connect without a TURN relay, which this build doesn't include. Fall back to local/bot if a connection won't establish.
+- Connections use STUN plus a free public **TURN** relay (Open Relay) so peers behind strict/symmetric NATs can still connect; if a connection can't be made within ~20s you get a clear "couldn't connect" message instead of a silent hang. For heavy use, swap in your own TURN credentials in `net.js` (`PEER_OPTS`).
 
 ## Menu
 
@@ -54,18 +60,21 @@ Cards are grouped into **Solo** (vs Bot, Freeplay), **Local network** (LAN Lobby
 
 Each player has 10 walls, drawn down from the tray as you place them.
 
-The game header has **Restart** (offline) or **Forfeit** (online), plus **Draw** (½). Offline, Draw asks the players to agree; online, it sends an offer the opponent accepts or declines.
+The game header's controls depend on the mode: **Restart** (↺) in freeplay only; **Resign** (⚑, red on hover) and **Draw** (½) in friend games and in local/online tournaments; bot games have neither (use **Back** to leave, then Rematch from the result card to replay). Draw asks the other player to agree — face-to-face for hotseat, or as an offer the opponent accepts/declines over the network (online tournaments route it through the host).
 
 ## Look & feel
 
-Type is **Space Grotesk** (loaded from Google Fonts, with a system-font fallback if offline). The palette is a single cool-gray surface family with one teal accent; the two players are a teal/amber duel, and **you are always teal at the bottom**. Winning rows are tinted in the owner's colour with a bright edge.
+Type is **Space Grotesk** (loaded from Google Fonts, with a system-font fallback if offline). The palette is a single cool-gray surface family with one teal accent; the two players are a teal/amber duel. Behind everything, a low-contrast **canvas background** drifts a faint board-grid and teal/amber wall segments — on-theme texture rather than a generic gradient, and it pauses when the tab is hidden and honours reduced-motion. The lobby, setup, and standings screens share one **tournament card** (a separated header, then `rank · name#tag · score` rows). **Walls are coloured by who placed them** (teal vs amber), and winning rows are tinted in the owner's colour with a bright edge.
+
+In networked games the board flips per player so each sees themselves teal at the bottom. **Local games (freeplay and tournament) don't flip** — the board stays put, each player keeps a fixed side and colour, and the player to move drags walls from their own rail.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `index.html` | Markup: menu, game screen, overlays |
+| `index.html` | Markup: menu, game screen, tournament cards, overlays |
 | `styles.css` | All styling; colors live in CSS custom properties on `:root` |
+| `bg.js` | Atmospheric canvas background — drifting board-grid + teal/amber wall motif (`#bg`) |
 | `rules.js` | Pure game logic — state, moves, jumps, wall legality, path validation (`window.Rules`) |
 | `bot.js` | Easy (random) / medium / hard AI (`window.Bot`) |
 | `net.js` | WebRTC transport via the PeerJS broker — 1v1 and host-as-hub (`window.Net`) |
@@ -76,3 +85,4 @@ Type is **Space Grotesk** (loaded from Google Fonts, with a system-font fallback
 
 - `detour_stats` — win/loss records keyed by bot difficulty (`easy` / `medium` / `hard`), shown in the difficulty picker.
 - `detour_name` — your display name (auto-generated default), used in online tournaments.
+- `detour_settings` — clock minutes, bonus seconds, and wall count.

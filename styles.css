@@ -22,10 +22,6 @@
   --danger: #ef6b4e;
   --danger-soft: color-mix(in srgb, var(--danger) 16%, transparent);
 
-  /* walls — warm timber, deliberately the only warm neutral */
-  --wall: #d2a878;
-  --wall-edge: #a87b4f;
-
   /* radius scale — tighter inside, softer outside */
   --r-xs: 7px;
   --r-sm: 10px;
@@ -71,7 +67,18 @@ body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-#app { min-height: 100dvh; display: grid; }
+/* atmospheric canvas — sits behind everything, lets the body gradient show through */
+#bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  display: block;
+}
+
+#app { position: relative; z-index: 1; min-height: 100dvh; display: grid; }
 
 .screen { display: none; }
 .screen.is-active { display: flex; }
@@ -204,10 +211,65 @@ body::after {
 .name-field label { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
 .name-field .text-input { text-align: center; font-weight: 600; }
 
-/* ---------- Online (friend room code) ---------- */
-#online { flex-direction: column; align-items: center; padding: 18px; width: 100%; }
-.online-head { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.hud-spacer { width: 40px; }
+.settings-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: -8px; }
+.setting { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.setting span { font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+.num-input {
+  width: 72px;
+  padding: 9px 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.num-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* ---------- Sub-screens (online + tournaments): a back button top-left, content centered ---------- */
+.sheet {
+  position: relative;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px;
+  width: 100%;
+}
+
+.back-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 15px 0 9px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .18s var(--ease), box-shadow .18s var(--ease), color .18s var(--ease), transform .18s var(--spring);
+}
+.back-btn:hover { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.back-btn:active { transform: translateY(1px); box-shadow: var(--shadow-press); }
+.back-arrow { width: 20px; height: 20px; display: block; flex: 0 0 auto; }
+/* in the game hud the back button sits inline with the status + action buttons */
+.hud .back-btn { align-self: auto; }
+
+.panel-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
 
 .online-panel {
   margin: auto;
@@ -218,6 +280,8 @@ body::after {
   width: min(340px, 92vw);
   text-align: center;
 }
+#online-choice { display: flex; flex-direction: column; gap: 22px; }
+#online-choice[hidden] { display: none; }
 .online-or { color: var(--faint); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
 .join-row { display: flex; gap: 8px; width: 100%; }
 
@@ -273,23 +337,53 @@ body::after {
 .text-input::placeholder { color: var(--faint); }
 .text-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }
 
-.player-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; min-height: 8px; }
-.player-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 9px 7px 13px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
-  font-size: 13.5px;
-  font-weight: 500;
+/* ---------- Tournament card (local setup, online lobby, standings) ---------- */
+.tcard {
+  margin: auto;
+  width: min(420px, 94vw);
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  box-shadow: var(--shadow-2), inset 0 0 0 1px var(--line);
+  overflow: hidden;
+  animation: rise .4s var(--ease) both;
 }
-.chip-x {
+.tcard-head {
+  padding: 16px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  background: linear-gradient(180deg, var(--surface-3), var(--surface-2));
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+
+.tcard-list { display: flex; flex-direction: column; min-height: 56px; }
+.tcard-list:empty::after {
+  content: "No players yet";
+  padding: 22px 20px;
+  font-size: 13.5px;
+  color: var(--faint);
+  text-align: center;
+}
+.trow {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 20px;
+  box-shadow: inset 0 -1px 0 var(--line-soft);
+  font-variant-numeric: tabular-nums;
+  animation: rise .3s var(--ease) both;
+}
+.trow:last-child { box-shadow: none; }
+.t-rank { color: var(--faint); font-weight: 700; font-size: 13px; text-align: center; }
+.t-name { font-weight: 600; font-size: 14.5px; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-tag { margin-left: 5px; font-size: 11.5px; font-weight: 600; color: var(--faint); letter-spacing: .02em; }
+.t-score { font-weight: 700; font-size: 15px; color: var(--text); min-width: 22px; text-align: right; }
+.t-remove {
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: none;
   border-radius: 50%;
   background: var(--surface-3);
@@ -298,45 +392,41 @@ body::after {
   cursor: pointer;
   transition: background .15s var(--ease), color .15s var(--ease);
 }
-.chip-x:hover { background: var(--danger-soft); color: var(--danger); }
+.t-remove:hover { background: var(--danger-soft); color: var(--danger); }
+.trow.t-winner { background: var(--accent-soft); }
+.trow.t-winner .t-rank, .trow.t-winner .t-score { color: var(--accent); }
+.trow.t-winner .t-name::after { content: " ♛"; color: var(--accent); }
 
-.standings-panel {
-  margin: auto;
+.tcard-foot {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  width: min(440px, 94vw);
-}
-.leaderboard {
-  border-radius: var(--r-md);
+  gap: 13px;
+  padding: 16px 20px 18px;
   background: var(--surface);
-  box-shadow: var(--shadow-1), inset 0 0 0 1px var(--line-soft);
-  overflow: hidden;
+  box-shadow: inset 0 1px 0 var(--line);
 }
-.lb-head, .lb-row {
-  display: grid;
-  grid-template-columns: 30px 1fr 30px 30px 30px 44px;
+.tadd-row { display: flex; gap: 8px; }
+.tadd-row .btn { flex: 0 0 auto; white-space: nowrap; }
+.tcard-note { text-align: center; font-size: 13px; font-weight: 500; color: var(--muted); min-height: 18px; }
+.tjoin {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 12px;
   padding: 11px 16px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.tjoin-label { font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--faint); }
+.tjoin-code {
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: .2em;
+  text-indent: .2em;
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
-.lb-head {
-  font-size: 11px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--faint);
-  background: var(--surface-2);
-}
-.lb-head > span:not(.lb-rank):not(.lb-name), .lb-row > span:not(.lb-rank):not(.lb-name) { text-align: center; }
-.lb-row { font-size: 14px; box-shadow: inset 0 1px 0 var(--line-soft); }
-.lb-rank { color: var(--muted); font-weight: 600; }
-.lb-name { font-weight: 600; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lb-pts { font-weight: 700; color: var(--text); text-align: center; }
-.lb-row.lb-winner { background: var(--accent-soft); }
-.lb-row.lb-winner .lb-rank, .lb-row.lb-winner .lb-pts { color: var(--accent); }
-.lb-row.lb-winner .lb-name::after { content: " ♛"; color: var(--accent); }
-.next-match { text-align: center; font-size: 14.5px; font-weight: 500; color: var(--muted); min-height: 20px; }
 
 /* ---------- Game ---------- */
 #game {
@@ -381,6 +471,9 @@ body::after {
   color: var(--muted);
   letter-spacing: .01em;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---------- Wall rails (opponent on top, you on the bottom) ---------- */
@@ -397,7 +490,6 @@ body::after {
   transition: box-shadow .2s var(--ease), background .2s var(--ease);
 }
 .rail.active { background: var(--surface-2); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, var(--line)); }
-.rail-bottom.disabled .rail-walls { opacity: .5; }
 
 .rail-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
 .rail-top .rail-dot { background: var(--opp); }
@@ -413,19 +505,35 @@ body::after {
 .rail-top .rail-count { color: var(--opp); }
 .rail-bottom .rail-count { color: var(--me); }
 .rail-walls { display: flex; align-items: center; gap: 5px; flex: 1; flex-wrap: wrap; }
+.rail-clock {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: .02em;
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--text);
+  min-width: 58px;
+  text-align: center;
+}
+.rail.active .rail-clock { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.rail-clock.low { color: var(--danger); background: var(--danger-soft); }
 
 .wtoken {
   width: 26px;
   height: 9px;
   border-radius: 3px;
-  background: linear-gradient(var(--wall), var(--wall-edge));
-  box-shadow: 0 1px 2px #04070b80, inset 0 1px 0 #ffffff20;
+  touch-action: none;
+  box-shadow: 0 1px 2px #04070b80, inset 0 1px 0 #ffffff30;
+  transition: transform .12s var(--spring);
 }
-.rail-bottom .wtoken { cursor: grab; touch-action: none; transition: transform .12s var(--spring); }
-.rail-bottom .wtoken:hover { transform: translateY(-2px); }
+.wtoken.grab { cursor: grab; }
+.wtoken.grab:hover { transform: translateY(-2px); }
 .wtoken.vert { width: 9px; height: 26px; }
-.wtoken.mine { box-shadow: 0 1px 2px #04070b80, inset 0 0 0 1px color-mix(in srgb, var(--me) 70%, transparent); }
-.wtoken.opp { box-shadow: 0 1px 2px #04070b80, inset 0 0 0 1px color-mix(in srgb, var(--opp) 70%, transparent); }
+.wtoken.mine { background: linear-gradient(color-mix(in srgb, var(--me) 92%, #fff 8%), color-mix(in srgb, var(--me) 60%, #000 40%)); }
+.wtoken.opp { background: linear-gradient(color-mix(in srgb, var(--opp) 92%, #fff 8%), color-mix(in srgb, var(--opp) 60%, #000 40%)); }
 
 .rotate-btn {
   flex: 0 0 auto;
@@ -503,14 +611,15 @@ body::after {
 .pawn.mine { background: radial-gradient(circle at 36% 30%, #c8f2eb, var(--me) 72%, var(--accent-deep)); }
 .pawn.opp { background: radial-gradient(circle at 36% 30%, #ffe0b0, var(--opp) 72%, #cf8632); }
 
-/* placed walls */
+/* placed walls — coloured by who placed them */
 .wall {
   position: relative;
   z-index: 2;
   border-radius: 4px;
-  background: linear-gradient(var(--wall), var(--wall-edge));
-  box-shadow: 0 3px 7px -1px #04070bcc, inset 0 1px 0 #ffffff35, inset 0 -2px 3px #00000040;
+  box-shadow: 0 3px 7px -1px #04070bcc, inset 0 1px 0 #ffffff45, inset 0 -2px 3px #00000050;
 }
+.wall.mine { background: linear-gradient(color-mix(in srgb, var(--me) 90%, #fff 10%), color-mix(in srgb, var(--me) 58%, #000 42%)); }
+.wall.opp { background: linear-gradient(color-mix(in srgb, var(--opp) 90%, #fff 10%), color-mix(in srgb, var(--opp) 58%, #000 42%)); }
 
 /* wall drop junctions — live only during a drag */
 .wjunction {
@@ -536,20 +645,22 @@ body::after {
   opacity: .55;
 }
 
-.preview { z-index: 4; border-radius: 4px; pointer-events: none; }
-.preview.ok { background: var(--accent); box-shadow: 0 0 14px var(--accent-soft); opacity: .9; }
+.preview { z-index: 4; border-radius: 4px; pointer-events: none; opacity: .9; }
+.preview.ok.mine { background: var(--me); box-shadow: 0 0 14px var(--me-soft); }
+.preview.ok.opp { background: var(--opp); box-shadow: 0 0 14px var(--opp-soft); }
 .preview.bad { background: var(--danger); opacity: .85; }
 
 .drag-ghost {
   position: fixed;
   transform: translate(-50%, -50%);
   border-radius: 4px;
-  background: linear-gradient(var(--wall), var(--wall-edge));
-  box-shadow: 0 6px 16px #04070be0, inset 0 1px 0 #ffffff40;
-  opacity: .92;
+  box-shadow: 0 6px 16px #04070be0, inset 0 1px 0 #ffffff45;
+  opacity: .94;
   pointer-events: none;
   z-index: 70;
 }
+.drag-ghost.mine { background: linear-gradient(color-mix(in srgb, var(--me) 90%, #fff 10%), color-mix(in srgb, var(--me) 58%, #000 42%)); }
+.drag-ghost.opp { background: linear-gradient(color-mix(in srgb, var(--opp) 90%, #fff 10%), color-mix(in srgb, var(--opp) 58%, #000 42%)); }
 
 /* ---------- Overlays ---------- */
 .overlay {
