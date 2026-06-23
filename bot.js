@@ -65,7 +65,7 @@
     return { type: 'move', to: advance };
   }
 
-  function chooseEasy(state, me) {
+  function chooseMedium(state, me) {
     const opp = 1 - me;
     const myDist = R.pathLength(state, me);
     const oppDist = R.pathLength(state, opp);
@@ -87,8 +87,24 @@
     return { type: 'move', to: advance };
   }
 
+  // Easy = pure random: mostly a random legal step, the odd random wall.
+  function chooseRandom(state, me) {
+    if (state.walls[me] > 0 && Math.random() < 0.18) {
+      for (let t = 0; t < 8; t++) {
+        const orient = Math.random() < 0.5 ? 'h' : 'v';
+        const r = Math.floor(Math.random() * (R.SIZE - 1));
+        const c = Math.floor(Math.random() * (R.SIZE - 1));
+        if (R.canPlaceWall(state, me, orient, r, c)) return { type: 'wall', orient, r, c };
+      }
+    }
+    const moves = R.legalMoves(state, me);
+    return { type: 'move', to: moves[Math.floor(Math.random() * moves.length)] };
+  }
+
   function chooseAction(state, me, difficulty) {
-    return difficulty === 'hard' ? chooseHard(state, me) : chooseEasy(state, me);
+    if (difficulty === 'easy') return chooseRandom(state, me);
+    if (difficulty === 'hard') return chooseHard(state, me);
+    return chooseMedium(state, me);
   }
 
   window.Bot = { chooseAction };

@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Detour</title>
+  <title>Detour — tactical race</title>
+  <meta name="description" content="Detour is a fast 1v1 tactical race: reach the far side first while walling your opponent into the long way around." />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -11,26 +16,87 @@
     <!-- Menu -->
     <section id="menu" class="screen is-active">
       <div class="brand">
+        <img class="brand-mark" src="favicon.svg" alt="" width="44" height="44" />
         <h1 class="brand-title">Detour</h1>
       </div>
-      <div class="modes">
-        <button class="mode-btn" data-mode="local">
-          <span class="mode-name">Local 1v1</span>
-          <span class="mode-sub">Two players, one device</span>
-        </button>
-        <button class="mode-btn" data-mode="bot">
-          <span class="mode-name">Play vs Bot</span>
-          <span class="mode-sub" data-record="bot">—</span>
-        </button>
-        <button class="mode-btn" data-mode="hard">
-          <span class="mode-name">Hard Mode AI</span>
-          <span class="mode-sub" data-record="hard">—</span>
-        </button>
-        <button class="mode-btn" data-mode="friend">
-          <span class="mode-name">Play with a Friend</span>
-          <span class="mode-sub">Online room code</span>
-        </button>
+
+      <div class="name-field">
+        <label for="player-name">Your name</label>
+        <input id="player-name" class="text-input" maxlength="16" autocomplete="off" spellcheck="false" />
       </div>
+
+      <div class="menu-groups">
+        <div class="menu-group">
+          <h2 class="group-label">Local</h2>
+          <button class="game-card" data-mode="bot">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="2.5"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.1"/><circle cx="9" cy="13" r="1.1"/><circle cx="15" cy="13" r="1.1"/><path d="M2 12v3M22 12v3"/></svg>
+            </span>
+            <span class="card-text"><span class="card-name">vs Bot</span><span class="card-sub">Three difficulties</span></span>
+          </button>
+          <button class="game-card" data-mode="local">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.6"/><circle cx="16" cy="8" r="2.6"/><path d="M3.5 19c0-2.5 2-4.2 4.5-4.2S12.5 16.5 12.5 19M11.5 19c0-2.5 2-4.2 4.5-4.2s4.5 1.7 4.5 4.2"/></svg>
+            </span>
+            <span class="card-text"><span class="card-name">Freeplay</span><span class="card-sub">Pass-and-play 1v1</span></span>
+          </button>
+          <button class="game-card" data-mode="tournament">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4z"/><path d="M6 5H4v1a3 3 0 0 0 3 3M18 5h2v1a3 3 0 0 1-3 3"/><path d="M9.5 20h5M12 13v4"/></svg>
+            </span>
+            <span class="card-text"><span class="card-name">Tournament</span><span class="card-sub">Round-robin, pass-and-play</span></span>
+          </button>
+        </div>
+
+        <div class="menu-group">
+          <h2 class="group-label">Local network</h2>
+          <button class="game-card disabled" disabled>
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v3M11 11l-5 6M13 11l5 6"/></svg>
+            </span>
+            <span class="card-text"><span class="card-name">LAN Lobby</span><span class="card-sub">See players nearby</span></span>
+            <span class="soon">Soon</span>
+          </button>
+          <button class="game-card disabled" disabled>
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4z"/><path d="M6 5H4v1a3 3 0 0 0 3 3M18 5h2v1a3 3 0 0 1-3 3"/><path d="M9.5 20h5M12 13v4"/></svg>
+            </span>
+            <span class="card-text"><span class="card-name">LAN Tournament</span><span class="card-sub">Same network, everyone plays</span></span>
+            <span class="soon">Soon</span>
+          </button>
+        </div>
+
+        <div class="menu-group">
+          <h2 class="group-label">Online</h2>
+          <button class="game-card" data-mode="friend">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5l5-5M10.5 6.5l1-1a3.5 3.5 0 0 1 5 5l-1 1M13.5 17.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></svg>
+            </span>
+            <span class="card-text"><span class="card-name">Play with a Friend</span><span class="card-sub">Share a room code</span></span>
+          </button>
+          <button class="game-card" data-mode="otour">
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4z"/><path d="M6 5H4v1a3 3 0 0 0 3 3M18 5h2v1a3 3 0 0 1-3 3"/><path d="M9.5 20h5M12 13v4"/><circle cx="12" cy="9" r="1.2"/></svg>
+            </span>
+            <span class="card-text"><span class="card-name">Tournament</span><span class="card-sub">Host or join a room</span></span>
+          </button>
+          <button class="game-card disabled" disabled>
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/><circle cx="15" cy="15" r="1.2"/></svg>
+            </span>
+            <span class="card-text"><span class="card-name">Random Match</span><span class="card-sub">Find any opponent</span></span>
+            <span class="soon">Soon</span>
+          </button>
+          <button class="game-card disabled" disabled>
+            <span class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M9 12.5L7.5 21l4.5-2.6 4.5 2.6-1.5-8.5"/></svg>
+            </span>
+            <span class="card-text"><span class="card-name">Ranked</span><span class="card-sub">Climb the ladder</span></span>
+            <span class="soon">Soon</span>
+          </button>
+        </div>
+      </div>
+
       <button class="link-btn" id="how-btn">How to play</button>
     </section>
 
@@ -58,38 +124,110 @@
       </div>
     </section>
 
+    <!-- Online tournament: entry -->
+    <section id="otour-entry" class="screen">
+      <header class="hud">
+        <button class="icon-btn" id="ote-back" title="Back to menu" aria-label="Back to menu">‹</button>
+        <div class="online-head">Online Tournament</div>
+        <span class="hud-spacer"></span>
+      </header>
+      <div class="online-panel">
+        <p class="panel-lead">Host a room and share the code, or join a friend's. Everyone plays everyone; whoever isn't playing watches live.</p>
+        <button class="btn primary big" id="ote-create">Create a tournament</button>
+        <div class="online-or">or</div>
+        <div class="join-row">
+          <input id="ote-code" class="code-input" placeholder="CODE" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+          <button class="btn" id="ote-join">Join</button>
+        </div>
+        <div class="online-status" id="ote-status"></div>
+      </div>
+    </section>
+
+    <!-- Online tournament: lobby -->
+    <section id="otour-lobby" class="screen">
+      <header class="hud">
+        <button class="icon-btn" id="otl-back" title="Leave" aria-label="Leave">‹</button>
+        <div class="online-head">Lobby</div>
+        <span class="hud-spacer"></span>
+      </header>
+      <div class="online-panel">
+        <div id="otl-code-wrap" hidden>
+          <div class="room-label">Room code</div>
+          <div class="room-code" id="otl-code">----</div>
+        </div>
+        <div class="player-list" id="otl-roster"></div>
+        <div class="online-status" id="otl-status"></div>
+        <button class="btn primary big" id="otl-start" hidden disabled>Start tournament</button>
+      </div>
+    </section>
+
     <!-- Game -->
     <section id="game" class="screen">
       <header class="hud">
         <button class="icon-btn" id="back-btn" title="Back to menu" aria-label="Back to menu">‹</button>
-        <div class="players">
-          <div class="player" data-player="1">
-            <span class="dot p2"></span>
-            <span class="p-name" data-name="1">Player 2</span>
-            <span class="p-walls" data-walls="1">10</span>
-          </div>
-          <div class="player" data-player="0">
-            <span class="dot p1"></span>
-            <span class="p-name" data-name="0">Player 1</span>
-            <span class="p-walls" data-walls="0">10</span>
-          </div>
-        </div>
+        <div class="status" id="status">Your turn</div>
         <button class="icon-btn" id="restart-btn" title="Restart" aria-label="Restart">↺</button>
+        <button class="icon-btn" id="draw-btn" title="Offer a draw" aria-label="Offer a draw" hidden>½</button>
+        <button class="icon-btn forfeit-btn" id="forfeit-btn" title="Forfeit" aria-label="Forfeit" hidden>⚑</button>
       </header>
 
-      <div class="status" id="status">Player 1's turn</div>
+      <div class="rail rail-top" id="rail-top">
+        <span class="rail-dot"></span>
+        <span class="rail-name" id="far-name">Opponent</span>
+        <span class="rail-count" id="far-count">10</span>
+        <div class="rail-walls" id="opp-inventory" aria-hidden="true"></div>
+      </div>
 
       <div class="board-wrap">
         <div class="board" id="board"></div>
       </div>
 
-      <div class="tray" id="tray">
-        <button class="rotate-btn" id="rotate-btn" title="Rotate wall">
-          <span class="rotate-glyph">⊞</span>
+      <div class="rail rail-bottom" id="tray">
+        <span class="rail-dot"></span>
+        <span class="rail-name" id="near-name">You</span>
+        <span class="rail-count" id="near-count">10</span>
+        <div class="rail-walls" id="inventory"></div>
+        <button class="rotate-btn" id="rotate-btn" title="Rotate wall" aria-label="Rotate wall">
+          <span class="rotate-glyph">⤡</span>
           <span id="orient-label">Horizontal</span>
         </button>
-        <div class="inventory" id="inventory"></div>
-        <div class="tray-hint">drag a wall onto the board</div>
+      </div>
+      <div class="tray-hint" id="tray-hint">drag a wall onto the board to block</div>
+    </section>
+
+    <!-- Tournament setup -->
+    <section id="tournament-setup" class="screen">
+      <header class="hud">
+        <button class="icon-btn" id="tp-back" title="Back to menu" aria-label="Back to menu">‹</button>
+        <div class="online-head">Tournament</div>
+        <span class="hud-spacer"></span>
+      </header>
+      <div class="online-panel">
+        <p class="panel-lead">Add players, then everyone plays everyone in pass-and-play. The leaderboard updates between matches.</p>
+        <div class="join-row">
+          <input id="tp-name" class="text-input" placeholder="Player name" maxlength="16" autocomplete="off" />
+          <button class="btn" id="tp-add">Add</button>
+        </div>
+        <div class="player-list" id="tp-list"></div>
+        <div class="online-status" id="tp-count">Add at least 2 players</div>
+        <button class="btn primary big" id="tp-start" disabled>Start tournament</button>
+      </div>
+    </section>
+
+    <!-- Tournament standings -->
+    <section id="tournament-standings" class="screen">
+      <header class="hud">
+        <button class="icon-btn" id="ts-back" title="Back to menu" aria-label="Back to menu">‹</button>
+        <div class="online-head">Standings</div>
+        <span class="hud-spacer"></span>
+      </header>
+      <div class="standings-panel">
+        <div class="leaderboard">
+          <div class="lb-head"><span class="lb-rank">#</span><span class="lb-name">Player</span><span>W</span><span>D</span><span>L</span><span class="lb-pts">Pts</span></div>
+          <div id="standings-body"></div>
+        </div>
+        <div class="next-match" id="next-match"></div>
+        <button class="btn primary big" id="play-next">Play match</button>
       </div>
     </section>
 
@@ -99,9 +237,46 @@
         <h2 id="win-title">You win</h2>
         <p id="win-sub" class="win-sub"></p>
         <div class="overlay-actions">
+          <button class="btn primary" id="continue-btn" hidden>Continue</button>
           <button class="btn primary" id="rematch-btn">Rematch</button>
           <button class="btn" id="menu-btn">Menu</button>
           <button class="btn ghost" id="share-btn">Share</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Draw offer / confirm -->
+    <div id="draw-prompt" class="overlay">
+      <div class="overlay-card">
+        <h2 id="draw-title">Draw offered</h2>
+        <p class="win-sub" id="draw-text"></p>
+        <div class="overlay-actions">
+          <button class="btn primary" id="draw-accept">Accept</button>
+          <button class="btn ghost" id="draw-decline">Decline</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Difficulty picker -->
+    <div id="difficulty" class="overlay">
+      <div class="overlay-card">
+        <h2>Pick your bot</h2>
+        <div class="diff-list">
+          <button class="diff-btn" data-diff="easy">
+            <span class="diff-main"><span class="diff-name">Easy</span><span class="diff-sub">Wanders at random</span></span>
+            <span class="diff-rec" data-record="easy"></span>
+          </button>
+          <button class="diff-btn" data-diff="medium">
+            <span class="diff-main"><span class="diff-name">Medium</span><span class="diff-sub">Races, walls when it slips behind</span></span>
+            <span class="diff-rec" data-record="medium"></span>
+          </button>
+          <button class="diff-btn" data-diff="hard">
+            <span class="diff-main"><span class="diff-name">Hard</span><span class="diff-sub">Reads both paths, walls for tempo</span></span>
+            <span class="diff-rec" data-record="hard"></span>
+          </button>
+        </div>
+        <div class="overlay-actions">
+          <button class="btn ghost" id="diff-close">Back</button>
         </div>
       </div>
     </div>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffb454"/>
+      <stop offset="0.5" stop-color="#4cc2ff"/>
+      <stop offset="1" stop-color="#6ea8ff"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="58" height="58" rx="15" fill="#161b22" stroke="#2b3440" stroke-width="2"/>
+  <!-- a wall blocking the straight path -->
+  <rect x="13" y="30" width="20" height="5" rx="2.5" fill="#d9b38c"/>
+  <!-- detour route: up, blocked, around to the right, then up to the goal -->
+  <path d="M21 50 V40 H43 V20" fill="none" stroke="url(#g)" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M37 26 L43 18 L49 26" fill="none" stroke="url(#g)" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="21" cy="50" r="5" fill="#6ea8ff"/>
+</svg>
