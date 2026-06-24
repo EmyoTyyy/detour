@@ -554,6 +554,12 @@
     clockTimer = setInterval(clockStep, 200);
   }
   const stopClock = () => { if (clockTimer) { clearInterval(clockTimer); clockTimer = null; } };
+  // keep the currently-viewed game's clock alive: build M.clock if missing and (re)start the local ticker
+  function syncViewClock(gi, rem) {
+    if (!M || M.mode !== 'otour' || M.view !== gi || !rem) return;
+    if (!M.clock) { M.clock = { rem: rem.slice(), bonus: 0, last: performance.now() }; if (OT && !OT.host) startClock(); }
+    else { M.clock.rem = rem.slice(); M.clock.last = performance.now(); }
+  }
   function clockStep() {
     if (!M || !M.clock) return stopClock();
     const s = M.state;
@@ -608,6 +614,13 @@
       if (g.clock.rem[p] <= 0) hostEndGame(g.gi, 1 - p);   // flagged on time
     }
     if (M && M.mode === 'otour' && M.view >= 0) renderClocks();
+    // push authoritative clocks ~1/s so spectators & idle players stay in sync between moves
+    if (now - (OT.lastClockBcast || 0) >= 1000) {
+      OT.lastClockBcast = now;
+      const c = [];
+      for (const g of OT.live.values()) if (g.clock && !g.done) c.push([g.gi, Math.round(g.clock.rem[0]), Math.round(g.clock.rem[1])]);
+      if (c.length) window.Net.broadcast({ t: 'clocks', c });
+    }
   }
 
   // ---------- online tournament: entry + lobby ----------
@@ -848,12 +861,14 @@
     OT.live.set(gi, g);
     OT.busy.add(m.a); OT.busy.add(m.b);
     OT.gameOf.set(OT.players[m.a].id, gi); OT.gameOf.set(OT.players[m.b].id, gi);
+    const snap = serState(st);
+    const clk = g.clock ? g.clock.rem : null;
     window.Net.broadcast({ t: 'gamestart', gi, a: g.aName, b: g.bName });
-    window.Net.broadcast({ t: 'state', gi, s: serState(st), clk: g.clock ? g.clock.rem : null });
+    window.Net.broadcast({ t: 'state', gi, s: snap, clk });
     [[m.a, 0], [m.b, 1]].forEach(([pi, seat]) => {
       const id = OT.players[pi].id;
       if (id === HOST_ID) { OT.myGame = gi; OT.mySeat = seat; OT.viewCoolUntil = 0; viewGame(gi); }
-      else window.Net.sendTo(id, { t: 'youplay', gi, seat });
+      else window.Net.sendTo(id, { t: 'youplay', gi, seat, a: g.aName, b: g.bName, s: snap, clk });
     });
   }
   // re-show the ranking once the local player's cooldown elapses (spectate buttons reappear)
@@ -1015,12 +1030,21 @@
       showClientStandings();
     }
     else if (msg.t === 'gamestart') {
+      OT.started = true;
       if (!OT.live) OT.live = new Map();
-      OT.live.set(msg.gi, { gi: msg.gi, aName: msg.a, bName: msg.b, state: null, clock: null, done: false });
+      ensureOtourM();
+      if (!OT.live.get(msg.gi)) OT.live.set(msg.gi, { gi: msg.gi, aName: msg.a, bName: msg.b, state: null, clock: null, done: false });
       if ($('#tournament-standings').classList.contains('is-active')) showClientStandings();
     }
-    else if (msg.t === 'youplay') {
+    else if (msg.t === 'youplay') {       // self-contained, so a dropped gamestart/state can't strand you
+      OT.started = true;
+      if (!OT.live) OT.live = new Map();
+      ensureOtourM();
       OT.myGame = msg.gi; OT.mySeat = msg.seat; OT.viewCoolUntil = 0;
+      let g = OT.live.get(msg.gi);
+      if (!g) { g = { gi: msg.gi, aName: msg.a, bName: msg.b, state: null, clock: null, done: false }; OT.live.set(msg.gi, g); }
+      if (msg.s) g.state = deState(msg.s);
+      if (msg.clk) g.clock = { rem: msg.clk.slice() };
       viewGame(msg.gi);
     }
     else if (msg.t === 'state') {
@@ -1029,9 +1053,18 @@
       if (msg.clk) g.clock = { rem: msg.clk.slice() };
       if (M && M.mode === 'otour' && M.view === msg.gi) {
         M.state = g.state;
-        if (M.clock && msg.clk) { M.clock.rem = msg.clk.slice(); M.clock.last = performance.now(); }
+        syncViewClock(msg.gi, msg.clk);
         render();
       }
+    }
+    else if (msg.t === 'clocks') {
+      if (!OT.live) return;
+      for (const [gi, r0, r1] of msg.c) {
+        const g = OT.live.get(gi);
+        if (g && !g.done) g.clock = { rem: [r0, r1] };
+        syncViewClock(gi, [r0, r1]);
+      }
+      if (M && M.mode === 'otour' && M.view >= 0) renderClocks();
     }
     else if (msg.t === 'gameresult') {
       OT.lastRows = msg.rows || OT.lastRows;

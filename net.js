@@ -7,18 +7,20 @@
   const LIB = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
   const PREFIX = 'detour-room-';
   const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no I/O/0/1
-  const CONNECT_TIMEOUT = 20000;
+  const CONNECT_TIMEOUT = 30000;   // phones on slow mobile data can take a while to gather ICE
 
   // STUN finds a direct path for most peers; TURN relays the rest (symmetric NATs,
   // strict mobile/corporate networks) — without it those connections fail silently.
-  // Open Relay is a free public TURN; swap in your own keys for production reliability.
+  // Phones on cellular almost always need TURN. Open Relay is a free public TURN; for
+  // reliable mobile play swap in your own credentials (metered.ca / Twilio) below.
   const PEER_OPTS = {
     config: {
       iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302'] },
         { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
         { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
         { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
       ],
     },
   };

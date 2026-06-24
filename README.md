@@ -43,7 +43,7 @@ No game server: the **host's browser is the hub**. Other players connect to it o
 - **The host must stay connected** — if the host leaves, the tournament ends for everyone (no host migration).
 - A player who **resigns** concedes their current game but stays in; a player who **disconnects** is auto-forfeited from their remaining games so the bracket keeps moving.
 - **Who starts is random** each game (no fixed first-move advantage), decided by the host.
-- Needs internet (the PeerJS broker). Connections use STUN plus a free public **TURN** relay (Open Relay) so peers behind strict/symmetric NATs can still connect; if a connection still can't be made within ~20s the player gets a clear "couldn't connect" message instead of a silent hang. For heavy use, swap in your own TURN credentials in `net.js` (`PEER_OPTS`). A truly offline LAN tournament still needs a local hub server.
+- Needs internet (the PeerJS broker). Connections use several STUN servers plus a free public **TURN** relay (Open Relay) so peers behind strict/symmetric NATs can still connect; if a connection still can't be made within ~30s the player gets a clear "couldn't connect" message instead of a silent hang. **Phones on cellular data almost always need TURN**, and the free public relay can be rate-limited or flaky — for reliable mobile play, drop your own TURN credentials (metered.ca free tier, or Twilio) into `net.js` (`PEER_OPTS`). A truly offline LAN tournament still needs a local hub server.
 
 ## Online play
 
