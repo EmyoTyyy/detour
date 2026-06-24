@@ -428,6 +428,79 @@ body::after {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- Live games (concurrent matches in the current round) ---------- */
+.live-games { display: flex; flex-direction: column; box-shadow: inset 0 -1px 0 var(--line); }
+.lg-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 20px;
+  box-shadow: inset 0 -1px 0 var(--line-soft);
+  font-size: 13.5px;
+}
+.lg-row:last-child { box-shadow: none; }
+.lg-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.lg-row.done .lg-dot { background: var(--faint); box-shadow: none; }
+.lg-label { flex: 1; min-width: 0; font-weight: 600; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-watch {
+  flex: 0 0 auto;
+  border: none;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 13px;
+  cursor: pointer;
+  transition: background .16s var(--ease), box-shadow .16s var(--ease), color .16s var(--ease);
+}
+.lg-watch:hover { background: var(--surface-2); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.lg-watch:disabled { color: var(--muted); cursor: default; background: none; box-shadow: none; font-weight: 500; }
+.lg-cool { padding: 13px 20px; font-size: 13px; color: var(--accent); text-align: center; box-shadow: inset 0 -1px 0 var(--line-soft); }
+
+/* ---------- Tournament chat ---------- */
+.chat {
+  margin: 14px auto 0;
+  width: min(420px, 94vw);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-1), inset 0 0 0 1px var(--line-soft);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px 15px;
+  max-height: 168px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.chat-log:empty::after { content: "No messages yet — say hi."; color: var(--faint); font-size: 12.5px; }
+.chat-msg { word-break: break-word; }
+.chat-msg .chat-name { font-weight: 700; color: var(--accent); margin-right: 6px; }
+.chat-msg.you .chat-name { color: var(--muted); }
+.chat-form { display: flex; gap: 8px; padding: 11px 13px; box-shadow: inset 0 1px 0 var(--line-soft); }
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 13px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+}
+.chat-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }
+.chat-form .btn { flex: 0 0 auto; }
+
 /* ---------- Game ---------- */
 #game {
   flex-direction: column;
@@ -712,6 +785,11 @@ body::after {
 .btn.primary:hover { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, white), var(--accent)); }
 .btn.ghost { background: none; box-shadow: none; color: var(--muted); }
 .btn.ghost:hover { background: var(--surface); color: var(--text); }
+
+/* square icon action buttons (rematch accept / deny) */
+.icon-action { min-width: 60px; padding: 13px 0; font-size: 20px; line-height: 1; }
+.btn.ghost.icon-action { box-shadow: inset 0 0 0 1px var(--line); }
+.btn.ghost.icon-action:hover { color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); background: var(--danger-soft); }
 
 /* difficulty picker */
 .diff-list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 20px; }

@@ -120,6 +120,15 @@
   }
   function broadcast(msg) { conns.forEach(c => { if (c.open) c.send(msg); }); }
   function sendTo(id, msg) { const c = conns.get(id); if (c && c.open) c.send(msg); }
+  // Host drops a single client. Stop tracking it immediately (so its close event
+  // won't re-fire a disconnect callback), then close shortly after to let any
+  // final "you were kicked" message flush first.
+  function kick(id) {
+    const c = conns.get(id);
+    if (!c) return;
+    conns.delete(id);
+    setTimeout(() => { try { c.close(); } catch { /* ignore */ } }, 200);
+  }
 
   async function joinHub(code, onEvent) {
     await ensureLib();
@@ -148,5 +157,5 @@
     conn = null; peer = null; cb = null;
   }
 
-  window.Net = { ensureLib, host, join, send, hostHub, joinHub, broadcast, sendTo, sendHost, close };
+  window.Net = { ensureLib, host, join, send, hostHub, joinHub, broadcast, sendTo, kick, sendHost, close };
 })();

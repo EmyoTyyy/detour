@@ -33,18 +33,24 @@ These apply to whatever you start next. For online games the **host's** settings
 
 ### Online tournament (host-as-hub)
 
-No game server: the **host's browser is the hub**. Other players connect to it over WebRTC (PeerJS signaling), the host owns the bracket and the authoritative board, and it relays each match as a state snapshot to both players and all spectators. Two play, everyone else watches live; the host advances between matches from the standings screen.
+No game server: the **host's browser is the hub**. Other players connect to it over WebRTC (PeerJS signaling), the host owns the bracket and the authoritative boards, and it relays every game as a state snapshot.
 
+- **Games run continuously.** The **host only clicks Start once.** Every pairing is queued, and a match **launches the moment both its players are free** — so several games run at the same time (up to `floor(players / 2)` early on) and each one starts as soon as its two players have finished their previous game. Nobody waits on the host between matches.
+- **A 5-second cooldown between your matches.** When your game ends you're dropped back to the ranking for a short breather — the **Watch buttons hide** during it — then your next match starts automatically (or the Watch buttons return if you're waiting on an opponent).
+- **Not playing right now? You see the ranking page.** It lists every game in progress; tap **Watch** to spectate any of them and **Back** to return to the ranking. When your own match starts you're taken straight to your board (**Resume** from the ranking if you step away).
+- **Chat.** The lobby and ranking pages have a tournament chat; the host relays every message to everyone.
+- **Kick.** The host can remove a player with the ✕ on their row — in the lobby, or mid-tournament (a kicked player is auto-forfeited from their remaining games, same as a disconnect).
 - **The host must stay connected** — if the host leaves, the tournament ends for everyone (no host migration).
-- A player who **forfeits** concedes the current match but stays in; a player who **disconnects** is auto-forfeited from their remaining matches so the bracket keeps moving.
+- A player who **resigns** concedes their current game but stays in; a player who **disconnects** is auto-forfeited from their remaining games so the bracket keeps moving.
+- **Who starts is random** each game (no fixed first-move advantage), decided by the host.
 - Needs internet (the PeerJS broker). Connections use STUN plus a free public **TURN** relay (Open Relay) so peers behind strict/symmetric NATs can still connect; if a connection still can't be made within ~20s the player gets a clear "couldn't connect" message instead of a silent hang. For heavy use, swap in your own TURN credentials in `net.js` (`PEER_OPTS`). A truly offline LAN tournament still needs a local hub server.
 
 ## Online play
 
-"Play with a Friend" connects two browsers peer-to-peer over WebRTC. One player **creates a room** and shares the 4-character code; the other **joins** with it. Once you create a room the join field disappears (you're the host now, waiting on an opponent — same flow as hosting a tournament). There is no game server: both browsers run the same rules and exchange only the action taken each turn (deterministic lockstep), so they stay in sync.
+"Play with a Friend" connects two browsers peer-to-peer over WebRTC. One player **creates a room** and shares the 4-character code; the other **joins** with it. Once you create a room the join field disappears (you're the host now, waiting on an opponent — same flow as hosting a tournament). There is no game server: both browsers run the same rules and exchange only the action taken each turn (deterministic lockstep), so they stay in sync. When a game ends, a **rematch needs both players** — pressing Rematch sends the other player a request to accept or decline; if both press Rematch, you go straight into the next game.
 
 - Signaling uses the free public **PeerJS** broker, lazy-loaded from a CDN only when you open the online screen — the offline modes never touch the network.
-- Each player sees themselves as **blue at the bottom** and the opponent as **orange at the top**; the board is rotated 180° for the guest so both play "upward." The host still moves first.
+- Each player sees themselves as **blue at the bottom** and the opponent as **orange at the top**; the board is rotated 180° for the guest so both play "upward." **Who moves first is random** (the host rolls it and shares it, for the first game and every rematch), so hosting carries no advantage.
 - Online games show a **Forfeit** flag (turns red on hover) instead of Restart — forfeiting hands the win to your opponent.
 - Connections use STUN plus a free public **TURN** relay (Open Relay) so peers behind strict/symmetric NATs can still connect; if a connection can't be made within ~20s you get a clear "couldn't connect" message instead of a silent hang. For heavy use, swap in your own TURN credentials in `net.js` (`PEER_OPTS`).
 
@@ -55,7 +61,7 @@ Cards are grouped into **Solo** (vs Bot, Freeplay), **Local network** (LAN Lobby
 ## Controls
 
 - **Move**: legal destinations highlight; click one to move.
-- **Walls**: your remaining walls sit in the tray under the board (the opponent's count is shown above it). Pick orientation with **Rotate**, then **drag a wall onto a board junction**. A preview shows it in your colour if legal, red if not. Illegal placements (overlaps, crosses, or fully trapping a player) are rejected.
+- **Walls**: your remaining walls sit in the tray under the board (the opponent's count is shown above it). Pick orientation with **Rotate** (or press **Space**), then **drag a wall onto a board junction**. A preview shows it in your colour if legal, red if not. Illegal placements (overlaps, crosses, or fully trapping a player) are rejected.
 - Jump a face-to-face opponent in a straight line; if a wall is behind them, side-step around instead.
 
 Each player has 10 walls, drawn down from the tray as you place them.

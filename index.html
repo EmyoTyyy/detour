@@ -167,6 +167,13 @@
           <button class="btn primary big" id="otl-start" hidden disabled>Start tournament</button>
         </div>
       </div>
+      <div class="chat" id="otl-chat" hidden>
+        <div class="chat-log" data-chat-log></div>
+        <form class="chat-form" data-chat-form>
+          <input class="chat-input" data-chat-input maxlength="200" placeholder="Message everyone…" autocomplete="off" />
+          <button class="btn" type="submit">Send</button>
+        </form>
+      </div>
     </section>
 
     <!-- Game -->
@@ -199,13 +206,13 @@
         <span class="rail-name" id="near-name">You</span>
         <span class="rail-count" id="near-count">10</span>
         <div class="rail-walls" id="inventory"></div>
-        <button class="rotate-btn" id="rotate-btn" title="Rotate wall" aria-label="Rotate wall">
+        <button class="rotate-btn" id="rotate-btn" title="Rotate wall (Space)" aria-label="Rotate wall">
           <span class="rotate-glyph">⤡</span>
           <span id="orient-label">Horizontal</span>
         </button>
         <span class="rail-clock" id="near-clock" hidden>10:00</span>
       </div>
-      <div class="tray-hint" id="tray-hint">drag a wall onto the board to block</div>
+      <div class="tray-hint" id="tray-hint">drag a wall onto the board · press Space to rotate</div>
     </section>
 
     <!-- Tournament setup (card) -->
@@ -237,10 +244,18 @@
       <div class="tcard">
         <div class="tcard-head" id="ts-head">Tournament</div>
         <div class="tcard-list" id="standings-body"></div>
+        <div class="live-games" id="live-games" hidden></div>
         <div class="tcard-foot">
           <div class="tcard-note" id="next-match"></div>
           <button class="btn primary big" id="play-next">Play match</button>
         </div>
+      </div>
+      <div class="chat" id="ts-chat" hidden>
+        <div class="chat-log" data-chat-log></div>
+        <form class="chat-form" data-chat-form>
+          <input class="chat-input" data-chat-input maxlength="200" placeholder="Message everyone…" autocomplete="off" />
+          <button class="btn" type="submit">Send</button>
+        </form>
       </div>
     </section>
 
@@ -253,7 +268,6 @@
           <button class="btn primary" id="continue-btn" hidden>Continue</button>
           <button class="btn primary" id="rematch-btn">Rematch</button>
           <button class="btn" id="menu-btn">Menu</button>
-          <button class="btn ghost" id="share-btn">Share</button>
         </div>
       </div>
     </div>
@@ -266,6 +280,18 @@
         <div class="overlay-actions">
           <button class="btn primary" id="draw-accept">Accept</button>
           <button class="btn ghost" id="draw-decline">Decline</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rematch request -->
+    <div id="rematch-prompt" class="overlay">
+      <div class="overlay-card">
+        <h2>Rematch?</h2>
+        <p class="win-sub" id="rematch-text">Your opponent wants a rematch.</p>
+        <div class="overlay-actions">
+          <button class="btn primary icon-action" id="rematch-accept" title="Accept" aria-label="Accept rematch">✓</button>
+          <button class="btn ghost icon-action" id="rematch-deny" title="Decline" aria-label="Decline rematch">✕</button>
         </div>
       </div>
     </div>

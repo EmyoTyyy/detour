@@ -16,8 +16,10 @@
   let previewEl = null;    // ghost wall preview on the board grid
   let drag = null;         // active drag-from-inventory gesture, or { locked:true } while input is frozen
   let pendingRole = null;  // 'host' | 'guest' while a room is connecting
-  let drawCtx = null;      // 'net' | 'local' — who the draw prompt is for
+  let drawCtx = null;      // 'net' | 'local' | 'otour' — who the draw prompt is for
   let tourneyPlayers = []; // names being added on the local setup screen
+  let netPeerName = null;  // opponent's display name in a friend game
+  let netRematch = { me: false, opp: false }; // mutual-consent rematch flags (friend games)
 
   // ---------- screens / overlays / toast ----------
   function showScreen(id) { $$('.screen').forEach(s => s.classList.toggle('is-active', s.id === id)); }
@@ -53,6 +55,8 @@
   }
 
   // ---------- match lifecycle ----------
+  const randomTurn = () => (Math.random() < 0.5 ? 0 : 1);   // who moves first — no fixed advantage
+
   function setControls() {
     const net = !!M.net;                       // friend 1v1
     const otour = M.mode === 'otour';          // online tournament
@@ -77,6 +81,7 @@
       settings: st,
       clock: setupClock(st),
     };
+    M.state.turn = randomTurn();
     setControls();
     drag = null;
     closeOverlay('overlay');
@@ -87,7 +92,7 @@
     startClock();
   }
 
-  function startNetMatch(role, myPlayer, settings) {
+  function startNetMatch(role, myPlayer, settings, first) {
     const st = settings || (M && M.settings) || mySettings();
     M = {
       state: R.createState(st.walls),
@@ -99,12 +104,27 @@
       settings: st,
       clock: setupClock(st),
     };
+    M.state.turn = first === 1 ? 1 : 0;   // starter is decided by the host and shared
     setControls();
     drag = null;
+    netRematch = { me: false, opp: false };
+    resetRematchButton();
+    resetOnlineScreen();         // so a finished game never leaves its room code lying around
     closeOverlay('overlay');
+    closeOverlay('rematch-prompt');
     showScreen('game');
     render();
     startClock();
+  }
+
+  // clear the friend-room screen back to its create/join state
+  function resetOnlineScreen() {
+    $('#online-choice').hidden = false;
+    $('#room-display').hidden = true;
+    $('#online-status').textContent = '';
+    $('#join-code').value = '';
+    $('#create-room').disabled = false;
+    $('#join-room').disabled = false;
   }
 
   function setOrient(orient) { M.orient = orient; render(); }
@@ -114,21 +134,21 @@
   // Index of the "near" player: shown at the bottom in teal, opponent at the top in amber.
   // Networked games flip per-client so you're at the bottom; local games keep a fixed board.
   const meIndex = () => {
-    if (M.mode === 'otour') return M.seat;
+    if (M.mode === 'otour') return (OT && M.view === OT.myGame && OT.mySeat >= 0) ? OT.mySeat : 0;
     if (M.net) return M.net.myPlayer;
     return 0;
   };
 
   function nameOf(idx) {
     if (M.names) return M.names[idx];
-    if (M.net) return idx === M.net.myPlayer ? 'You' : 'Opponent';
+    if (M.net) return idx === M.net.myPlayer ? 'You' : (netPeerName || 'Opponent');
     if (M.mode === 'local') return `Player ${idx + 1}`;
     return idx === 0 ? 'You' : 'Bot · ' + M.difficulty[0].toUpperCase() + M.difficulty.slice(1);
   }
 
   const interactive = () => {
     if (!M || M.state.winner !== null || drag?.locked) return false;
-    if (M.mode === 'otour') return M.playing && M.seat === M.state.turn;
+    if (M.mode === 'otour') return M.playing && OT && OT.mySeat === M.state.turn;
     if (M.net) return M.net.connected && M.net.myPlayer === M.state.turn;
     return M.human[M.state.turn];
   };
@@ -177,8 +197,13 @@
     $('#continue-btn').hidden = !tourney;
     $('#rematch-btn').hidden = tourney;
     $('#menu-btn').hidden = tourney;
-    $('#share-btn').hidden = tourney;
+    resetRematchButton();
     openOverlay('overlay');
+  }
+  function resetRematchButton() {
+    const b = $('#rematch-btn');
+    b.disabled = false;
+    b.textContent = 'Rematch';
   }
 
   function endMatch() {
@@ -197,9 +222,40 @@
   }
 
   function requestRematch() {
-    if (M.net) { window.Net.send({ type: 'rematch' }); startNetMatch(M.net.role, M.net.myPlayer); }
-    else if (M.mode === 'tournament') startTournamentMatch();
+    if (M.net) return netWantRematch();          // friend games need both players to agree
+    if (M.mode === 'tournament') startTournamentMatch();
     else startMatch(M.mode, M.difficulty);
+  }
+
+  // ---- friend-game rematch: both must agree (either both press Rematch, or one accepts the other's offer) ----
+  function netWantRematch() {
+    closeOverlay('rematch-prompt');
+    netRematch.me = true;
+    window.Net.send({ type: 'rematch' });
+    if (netRematch.opp) return reachRematch();    // the other side already wants it → go
+    const b = $('#rematch-btn');                  // otherwise wait for them
+    b.disabled = true;
+    b.textContent = 'Waiting…';
+  }
+  // Both players agreed. The host picks (and shares) who starts so the new game stays in sync.
+  function reachRematch() {
+    closeOverlay('rematch-prompt');
+    if (M.net.role === 'host') {
+      const first = randomTurn();
+      window.Net.send({ type: 'rematch-go', first, settings: M.settings });
+      startNetMatch('host', 0, M.settings, first);
+    }
+    // the guest waits for 'rematch-go'
+  }
+  function openRematchPrompt() {
+    $('#rematch-text').textContent = `${netPeerName || 'Your opponent'} wants a rematch.`;
+    openOverlay('rematch-prompt');
+  }
+  function rematchAccept() { netWantRematch(); }
+  function rematchDeny() {
+    closeOverlay('rematch-prompt');
+    netRematch.opp = false;
+    window.Net.send({ type: 'rematch-decline' });
   }
 
   function forfeit() {
@@ -222,10 +278,14 @@
   }
 
   function leaveMatch() {
+    if (M && M.mode === 'otour') {            // Back from any board returns to the ranking page
+      if (M.view >= 0) { stopClock(); return showOtourStandings(); }
+      return leaveOtour();                    // already on the ranking → leave the tournament
+    }
     stopClock();
-    if (M && M.mode === 'otour') return leaveOtour();
-    if (M && M.mode === 'net') window.Net.close();
+    if (M && M.mode === 'net') { window.Net.close(); netPeerName = null; netRematch = { me: false, opp: false }; }
     closeOverlay('overlay');
+    closeOverlay('rematch-prompt');
     if (M && M.mode === 'tournament') return showTournamentStandings();
     showScreen('menu');
     renderRecords();
@@ -361,11 +421,14 @@
   const sortRows = list => [...list].sort((a, b) => b.pts - a.pts || b.w - a.w || a.l - b.l || a.name.localeCompare(b.name));
 
   // Shared leaderboard renderer for local + online tournaments.
-  function fillLeaderboard(rows, headline, btnText, crown, title) {
+  function fillLeaderboard(rows, headline, btnText, crown, title, onKick) {
     if (title) $('#ts-head').textContent = title;
     const body = $('#standings-body');
     body.innerHTML = '';
-    rows.forEach((p, rank) => body.appendChild(tRow(rank + 1, p.name, p.pts, crown && rank === 0, null)));
+    rows.forEach((p, rank) => {
+      const kick = onKick && p.id && p.id !== HOST_ID && !p.left ? () => onKick(p.id) : null;
+      body.appendChild(tRow(rank + 1, p.name, p.pts, crown && rank === 0, kick));
+    });
     $('#next-match').textContent = headline;
     const btn = $('#play-next');
     btn.hidden = !btnText;
@@ -377,6 +440,8 @@
     const headline = done ? `${sortRows(T.players)[0].name} takes the crown`
       : `Match ${T.current + 1} of ${T.schedule.length} — ${T.players[T.schedule[T.current][0]].name} vs ${T.players[T.schedule[T.current][1]].name}`;
     fillLeaderboard(sortRows(T.players), headline, done ? 'New tournament' : 'Play match', done, 'Local tournament');
+    $('#ts-chat').hidden = true;        // local tournaments are single-device — no chat/spectate
+    $('#live-games').hidden = true;
   }
   function playNext() {
     if (T.current >= T.schedule.length) openTournamentSetup();
@@ -396,6 +461,7 @@
       settings: T.settings,
       clock: setupClock(T.settings),
     };
+    M.state.turn = randomTurn();
     setControls();
     drag = null;
     closeOverlay('overlay');
@@ -500,14 +566,14 @@
     if (M.clock.rem[p] <= 0 && clockAuthority(p)) onFlag(p);
   }
   function clockAuthority(p) {
-    if (M.mode === 'otour') return M.otour.host;
+    if (M.mode === 'otour') return false;   // host ticks every game via hostClockTick; clients never flag
     if (M.net) return M.net.myPlayer === p;
     return true;
   }
   function onFlag(p) {
     const s = M.state;
     if (s.winner !== null) return;
-    if (M.mode === 'otour') { if (M.otour.host) hostEndMatch(1 - p); return; }
+    if (M.mode === 'otour') return;          // handled by the host's per-game ticker
     if (M.net) { window.Net.send({ type: 'timeout' }); s.winner = 1 - p; showWin('You lost on time', 'Your clock ran out.'); return; }
     s.winner = 1 - p;
     if (M.mode === 'tournament') return endTournamentMatch(1 - p);
@@ -523,6 +589,27 @@
     M.clock.last = performance.now();
   }
 
+  // host-authoritative clock for ALL concurrent games in the round
+  let hostClockTimer = null;
+  function hostStartClock() {
+    hostStopClock();
+    if (!OT || !OT.settings || !OT.settings.time) return;   // untimed tournament
+    hostClockTimer = setInterval(hostClockTick, 200);
+  }
+  function hostStopClock() { if (hostClockTimer) { clearInterval(hostClockTimer); hostClockTimer = null; } }
+  function hostClockTick() {
+    if (!OT || !OT.host || !OT.live) return hostStopClock();
+    const now = performance.now();
+    for (const g of OT.live.values()) {
+      if (g.done || !g.clock || g.state.winner !== null) continue;
+      const dt = now - g.clock.last; g.clock.last = now;
+      const p = g.state.turn;
+      g.clock.rem[p] = Math.max(0, g.clock.rem[p] - dt);
+      if (g.clock.rem[p] <= 0) hostEndGame(g.gi, 1 - p);   // flagged on time
+    }
+    if (M && M.mode === 'otour' && M.view >= 0) renderClocks();
+  }
+
   // ---------- online tournament: entry + lobby ----------
   function openOtourEntry() {
     OT = null;
@@ -534,7 +621,7 @@
   }
 
   async function otourCreate() {
-    OT = { host: true, roster: [{ id: HOST_ID, name: myName() }], started: false };
+    OT = { host: true, roster: [{ id: HOST_ID, name: myName() }], started: false, chat: [] };
     $('#ote-create').disabled = true; $('#ote-join').disabled = true;
     $('#ote-status').textContent = 'Creating room…';
     try {
@@ -551,7 +638,7 @@
   async function otourJoin() {
     const code = $('#ote-code').value.trim().toUpperCase();
     if (code.length < 4) { $('#ote-status').textContent = 'Enter the 4-character code.'; return; }
-    OT = { host: false, names: [], code };
+    OT = { host: false, names: [], code, chat: [] };
     $('#ote-create').disabled = true; $('#ote-join').disabled = true;
     $('#ote-status').textContent = 'Connecting…';
     try { await window.Net.joinHub(code, onClientEvent); }
@@ -567,23 +654,62 @@
     $('#otl-code').textContent = (OT && OT.code) || '----';
     $('#otl-start').hidden = !host;
 
-    const names = host ? OT.roster.map(p => p.name) : (OT.names || []);
     const list = $('#otl-roster');
     list.innerHTML = '';
-    names.forEach((n, i) => list.appendChild(tRow(i + 1, n, 0, false, null)));
     if (host) {
-      $('#otl-start').disabled = names.length < 2;
-      $('#otl-status').textContent = names.length < 2 ? 'Waiting for players to join…' : `${names.length} players ready`;
+      OT.roster.forEach((p, i) => {
+        const onKick = p.id === HOST_ID ? null : () => hostKick(p.id);   // host can drop a joiner
+        list.appendChild(tRow(i + 1, p.name, 0, false, onKick));
+      });
+      const n = OT.roster.length;
+      $('#otl-start').disabled = n < 2;
+      $('#otl-status').textContent = n < 2 ? 'Waiting for players to join…' : `${n} players ready`;
     } else {
+      (OT.names || []).forEach((n, i) => list.appendChild(tRow(i + 1, n, 0, false, null)));
       $('#otl-status').textContent = 'Waiting for the host to start…';
     }
+    $('#otl-chat').hidden = false;
+    renderChat();
   }
   function leaveOtour() {
     stopClock();
+    hostStopClock();
     window.Net.close();
     OT = null; M = null;
     closeOverlay('overlay'); closeOverlay('draw-prompt');
     showScreen('menu');
+  }
+
+  // ---------- tournament chat (host relays everyone's messages) ----------
+  function addChat(name, text) {
+    if (!OT) return;
+    if (!OT.chat) OT.chat = [];
+    OT.chat.push({ name, text });
+    if (OT.chat.length > 60) OT.chat.shift();
+    renderChat();
+  }
+  function renderChat() {
+    const logs = $$('[data-chat-log]');
+    if (!logs.length) return;
+    const me = myName();
+    logs.forEach(log => {
+      log.innerHTML = '';
+      ((OT && OT.chat) || []).forEach(m => {
+        const row = document.createElement('div');
+        row.className = 'chat-msg' + (m.name === me ? ' you' : '');
+        const nm = document.createElement('span'); nm.className = 'chat-name'; nm.textContent = m.name === me ? 'You' : m.name;
+        const tx = document.createElement('span'); tx.className = 'chat-text'; tx.textContent = m.text;
+        row.append(nm, tx);
+        log.appendChild(row);
+      });
+      log.scrollTop = log.scrollHeight;
+    });
+  }
+  function sendChat(text) {
+    const clean = String(text || '').trim().slice(0, 200);
+    if (!clean || !OT) return;
+    if (OT.host) { addChat(myName(), clean); window.Net.broadcast({ t: 'chat', name: myName(), text: clean }); }
+    else window.Net.sendHost({ t: 'chat', text: clean });
   }
 
   // ---------- online tournament: host (authority) ----------
@@ -605,8 +731,31 @@
     else if (msg.t === 'draw-offer') hostDrawOffer(id);
     else if (msg.t === 'draw-accept') hostDrawAccept(id);
     else if (msg.t === 'draw-decline') hostDrawDecline(id);
+    else if (msg.t === 'chat') hostChat(id, msg.text);
+  }
+  function hostChat(id, text) {
+    const clean = String(text || '').slice(0, 200).trim();
+    if (!clean) return;
+    const name = nameById(id);
+    addChat(name, clean);
+    window.Net.broadcast({ t: 'chat', name, text: clean });   // echo to everyone (incl. sender)
   }
   function broadcastLobby() { window.Net.broadcast({ t: 'lobby', names: OT.roster.map(p => p.name) }); }
+  function nameById(id) {
+    if (id === HOST_ID) return myName();
+    const src = (OT && (OT.started ? OT.players : OT.roster)) || [];
+    const p = src.find(x => x.id === id);
+    return (p && p.name) || 'Player';
+  }
+  // Host drops a player: tell them, run the same removal/forfeit path as a disconnect, then close.
+  function hostKick(id) {
+    if (!OT || !OT.host || id === HOST_ID) return;
+    window.Net.sendTo(id, { t: 'kicked' });
+    hostOnDisconnect(id);          // lobby: drops from roster + re-renders; in-play: forfeits
+    window.Net.kick(id);
+    // refresh the standings if we're on it (and not mid result-overlay from a just-ended match)
+    if ($('#tournament-standings').classList.contains('is-active') && !$('#overlay').classList.contains('is-active')) showHostStandings();
+  }
 
   function hostOnDisconnect(id) {
     if (!OT || !OT.host) return;
@@ -618,148 +767,226 @@
     }
     const p = OT.players.find(x => x.id === id);
     if (p) p.left = true;
-    if (OT.G && OT.G.winner === null && OT.pair) {
-      const [ai, bi] = OT.pair;
-      if (OT.players[ai].id === id) return hostEndMatch(1);
-      if (OT.players[bi].id === id) return hostEndMatch(0);
+    const gi = OT.gameOf && OT.gameOf.get(id);
+    const g = (gi != null) ? OT.live.get(gi) : null;
+    if (g && !g.done) {
+      const slot = OT.players[g.a].id === id ? 0 : 1;
+      hostEndGame(g.gi, 1 - slot);   // their opponent takes the game
     }
+    hostSchedule();   // auto-award the departed player's remaining matches; launch anything newly free
   }
+
+  // round-robin organised into rounds (circle method) so a whole round runs concurrently
+  function buildRounds(n) {
+    const arr = [...Array(n).keys()];
+    if (n % 2) arr.push(-1);              // odd player count → a bye seat
+    const m = arr.length, rounds = [];
+    for (let r = 0; r < m - 1; r++) {
+      const round = [];
+      for (let i = 0; i < m / 2; i++) {
+        const a = arr[i], b = arr[m - 1 - i];
+        if (a !== -1 && b !== -1) round.push([a, b]);
+      }
+      if (round.length) rounds.push(round);
+      arr.splice(1, 0, arr.pop());        // rotate, keeping arr[0] fixed
+    }
+    for (let i = rounds.length - 1; i > 0; i--) { const k = Math.floor(Math.random() * (i + 1)); [rounds[i], rounds[k]] = [rounds[k], rounds[i]]; }
+    return rounds;
+  }
+
+  const COOLDOWN = 5000;   // ms a player rests between matches
 
   function hostStartTournament() {
     if (!OT || !OT.host || OT.roster.length < 2) return;
     OT.settings = mySettings();
     OT.players = OT.roster.map(p => ({ id: p.id, name: p.name, w: 0, d: 0, l: 0, pts: 0, left: false }));
-    OT.schedule = [];
-    for (let i = 0; i < OT.players.length; i++)
-      for (let j = i + 1; j < OT.players.length; j++) OT.schedule.push([i, j]);
-    for (let i = OT.schedule.length - 1; i > 0; i--) {
-      const k = Math.floor(Math.random() * (i + 1));
-      [OT.schedule[i], OT.schedule[k]] = [OT.schedule[k], OT.schedule[i]];
-    }
-    OT.current = 0; OT.started = true;
-    hostNextMatch();
-  }
-
-  function hostNextMatch() {
-    while (OT.current < OT.schedule.length) {
-      const [ai, bi] = OT.schedule[OT.current];
-      const pa = OT.players[ai], pb = OT.players[bi];
-      if (pa.left && pb.left) { OT.current++; continue; }
-      if (pa.left || pb.left) { awardMatch(ai, bi, pa.left ? 1 : 0); OT.current++; continue; }
-      return hostBeginMatch(ai, bi);
-    }
-    hostFinish();
+    // every pairing, ordered by rounds so the opening launches a balanced spread, kept as a flat queue
+    OT.schedule = buildRounds(OT.players.length).flat().map(([a, b]) => ({ a, b, played: false }));
+    OT.live = new Map();        // gi -> live game
+    OT.gameOf = new Map();      // playerId -> gi (live only)
+    OT.busy = new Set();        // player idx currently in a game
+    OT.coolUntil = new Map();   // player idx -> ms when free again
+    OT.nextGi = 0;
+    OT.myGame = -1; OT.mySeat = -1; OT.viewCoolUntil = 0;
+    OT.started = true; OT.done = false;
+    ensureOtourM();
+    window.Net.broadcast({ t: 'begin', rows: sortRows(OT.players) });
+    hostStartClock();
+    showOtourStandings();
+    hostSchedule();   // launch the opening matches; from here it self-schedules
   }
   function awardMatch(ai, bi, winSlot) {
     const win = OT.players[winSlot === 0 ? ai : bi], lose = OT.players[winSlot === 0 ? bi : ai];
     win.w++; win.pts += 3; lose.l++;
   }
+  const playerFree = (p, now) => !OT.players[p].left && !OT.busy.has(p) && now >= (OT.coolUntil.get(p) || 0);
 
-  function hostBeginMatch(ai, bi) {
-    OT.G = R.createState(OT.settings.walls);
-    OT.clock = setupClock(OT.settings);
-    OT.pair = [ai, bi];
-    OT.drawOffer = null;
-    const pa = OT.players[ai], pb = OT.players[bi];
-    const clk = OT.clock ? OT.clock.rem.slice() : null;
-    OT.players.forEach(p => {
-      if (p.id === HOST_ID) return;
-      const role = p.id === pa.id ? 'a' : p.id === pb.id ? 'b' : 'spec';
-      window.Net.sendTo(p.id, { t: 'start', a: pa.name, b: pb.name, role, matchNo: OT.current + 1, total: OT.schedule.length, clk });
+  // launch every pending match whose two players are free right now (greedy, continuous)
+  function hostSchedule() {
+    if (!OT || !OT.host || OT.done) return;
+    const now = performance.now();
+    let changed = false;
+    for (const m of OT.schedule) {
+      if (m.played) continue;
+      if (OT.players[m.a].left || OT.players[m.b].left) {     // someone gone → auto-award (or void)
+        if (!(OT.players[m.a].left && OT.players[m.b].left)) awardMatch(m.a, m.b, OT.players[m.a].left ? 1 : 0);
+        m.played = true; changed = true; continue;
+      }
+      if (playerFree(m.a, now) && playerFree(m.b, now)) { launchGame(m); changed = true; }
+    }
+    if (OT.schedule.every(m => m.played) && OT.live.size === 0) return hostFinish();
+    if (changed && $('#tournament-standings').classList.contains('is-active') && (!M || M.view < 0)) showHostStandings();
+  }
+  function launchGame(m) {
+    m.played = true;
+    const gi = OT.nextGi++;
+    const st = R.createState(OT.settings.walls); st.turn = randomTurn();
+    const g = {
+      gi, a: m.a, b: m.b, aName: OT.players[m.a].name, bName: OT.players[m.b].name,
+      state: st, clock: setupClock(OT.settings), drawOffer: null, done: false,
+    };
+    OT.live.set(gi, g);
+    OT.busy.add(m.a); OT.busy.add(m.b);
+    OT.gameOf.set(OT.players[m.a].id, gi); OT.gameOf.set(OT.players[m.b].id, gi);
+    window.Net.broadcast({ t: 'gamestart', gi, a: g.aName, b: g.bName });
+    window.Net.broadcast({ t: 'state', gi, s: serState(st), clk: g.clock ? g.clock.rem : null });
+    [[m.a, 0], [m.b, 1]].forEach(([pi, seat]) => {
+      const id = OT.players[pi].id;
+      if (id === HOST_ID) { OT.myGame = gi; OT.mySeat = seat; OT.viewCoolUntil = 0; viewGame(gi); }
+      else window.Net.sendTo(id, { t: 'youplay', gi, seat });
     });
-    const hostRole = pa.id === HOST_ID ? 'a' : pb.id === HOST_ID ? 'b' : 'spec';
-    setupOtourMatch(hostRole, pa.name, pb.name, true, clk);
-    M.state = OT.G;
-    M.clock = OT.clock;   // host ticks the authoritative clock
-    window.Net.broadcast({ t: 'state', s: serState(OT.G), clk: OT.clock ? OT.clock.rem : null });
-    render();
-    startClock();
+  }
+  // re-show the ranking once the local player's cooldown elapses (spectate buttons reappear)
+  function scheduleCoolRefresh() {
+    if (OT.coolTimer) clearTimeout(OT.coolTimer);
+    OT.coolTimer = setTimeout(() => {
+      OT.coolTimer = null;
+      if ($('#tournament-standings').classList.contains('is-active')) showOtourStandings();
+    }, COOLDOWN + 60);
   }
 
+  function gameName(g, slot) { return slot === 0 ? g.aName : g.bName; }
+
+  function ensureOtourM() {
+    if (!M || M.mode !== 'otour') {
+      M = { mode: 'otour', orient: 'h', net: null, otour: { host: !!(OT && OT.host) }, view: -1, playing: false, spectating: false, state: null, clock: null, names: ['', ''] };
+      setControls();
+    }
+  }
+
+  // open a game's board: own game is playable, others are read-only
+  function viewGame(gi) {
+    const g = OT && OT.live && OT.live.get(gi);
+    if (!g) return;
+    ensureOtourM();
+    M.view = gi;
+    M.names = [gameName(g, 0), gameName(g, 1)];
+    M.state = g.state || R.createState();
+    M.clock = g.clock ? (OT.host ? g.clock : { rem: g.clock.rem.slice(), bonus: 0, last: performance.now() }) : null;
+    M.playing = gi === OT.myGame && !g.done;
+    M.spectating = gi !== OT.myGame;
+    setControls();
+    drag = null;
+    closeOverlay('overlay'); closeOverlay('draw-prompt');
+    showScreen('game');
+    render();
+    if (!OT.host) startClock();   // clients tick the viewed clock locally; the host uses hostClockTick
+  }
+
+  function gameOfId(fromId) { const gi = OT && OT.gameOf && OT.gameOf.get(fromId); return (gi != null) ? OT.live.get(gi) : null; }
+
   function hostApplyAction(action, fromId) {
-    if (!OT || !OT.host || !OT.G || OT.G.winner !== null) return;
-    const s = OT.G, [ai, bi] = OT.pair;
-    const expect = s.turn === 0 ? OT.players[ai].id : OT.players[bi].id;
+    const g = gameOfId(fromId);
+    if (!g || g.done || g.state.winner !== null) return;
+    const s = g.state;
+    const expect = s.turn === 0 ? OT.players[g.a].id : OT.players[g.b].id;
     if (fromId !== expect) return;
     const actor = s.turn;
     if (action.type === 'wall') { if (!R.canPlaceWall(s, s.turn, action.orient, action.r, action.c)) return; R.applyWall(s, action.orient, action.r, action.c); }
     else { if (!R.legalMoves(s, s.turn).some(m => m.r === action.to.r && m.c === action.to.c)) return; R.applyMove(s, action.to); }
-    if (OT.clock) { OT.clock.rem[actor] += OT.clock.bonus; OT.clock.last = performance.now(); }
-    window.Net.broadcast({ t: 'state', s: serState(s), clk: OT.clock ? OT.clock.rem : null });
-    if (M && M.mode === 'otour' && M.otour.host) render();
-    if (s.winner !== null) hostEndMatch(s.winner);
+    if (g.clock) { g.clock.rem[actor] += g.clock.bonus; g.clock.last = performance.now(); }
+    window.Net.broadcast({ t: 'state', gi: g.gi, s: serState(s), clk: g.clock ? g.clock.rem : null });
+    if (M && M.mode === 'otour' && M.view === g.gi) { M.state = s; render(); }
+    if (s.winner !== null) hostEndGame(g.gi, s.winner);
   }
   function hostForfeit(fromId) {
-    if (!OT || !OT.host || !OT.G || OT.G.winner !== null) return;
-    const [ai, bi] = OT.pair;
-    const slot = fromId === OT.players[ai].id ? 0 : fromId === OT.players[bi].id ? 1 : -1;
-    if (slot < 0) return;
-    hostEndMatch(1 - slot);
+    const g = gameOfId(fromId);
+    if (!g || g.done) return;
+    const slot = OT.players[g.a].id === fromId ? 0 : 1;
+    hostEndGame(g.gi, 1 - slot);
   }
-  // ---- online-tournament draws: offer → opponent agrees → host ends the match ----
+  // ---- online-tournament draws: offer → opponent agrees → host ends that game ----
   function hostDrawOffer(fromId) {
-    if (!OT || !OT.host || !OT.G || OT.G.winner !== null || !OT.pair) return;
-    const [ai, bi] = OT.pair;
-    const slot = fromId === OT.players[ai].id ? 0 : fromId === OT.players[bi].id ? 1 : -1;
-    if (slot < 0) return;
-    OT.drawOffer = slot;
-    const otherId = OT.players[slot === 0 ? bi : ai].id;
-    if (otherId === HOST_ID) openDrawPrompt('otour');   // host is the opponent — prompt locally
+    const g = gameOfId(fromId);
+    if (!g || g.done) return;
+    const slot = OT.players[g.a].id === fromId ? 0 : 1;
+    g.drawOffer = slot;
+    const otherId = OT.players[slot === 0 ? g.b : g.a].id;
+    if (otherId === HOST_ID) openDrawPrompt('otour');     // host is the opponent — prompt locally
     else window.Net.sendTo(otherId, { t: 'draw-offer' });
   }
   function hostDrawAccept(fromId) {
-    if (!OT || !OT.host || !OT.G || OT.G.winner !== null || OT.drawOffer == null || !OT.pair) return;
-    const [ai, bi] = OT.pair;
-    const slot = fromId === OT.players[ai].id ? 0 : fromId === OT.players[bi].id ? 1 : -1;
-    if (slot < 0 || slot === OT.drawOffer) return;      // only the offerer's opponent can accept
-    OT.drawOffer = null;
-    hostEndDraw();
+    const g = gameOfId(fromId);
+    if (!g || g.done || g.drawOffer == null) return;
+    const slot = OT.players[g.a].id === fromId ? 0 : 1;
+    if (slot === g.drawOffer) return;                     // only the offerer's opponent accepts
+    g.drawOffer = null;
+    hostEndGame(g.gi, null, true);
   }
   function hostDrawDecline(fromId) {
-    if (!OT || !OT.host || OT.drawOffer == null || !OT.pair) return;
-    const [ai, bi] = OT.pair;
-    const offererId = OT.players[OT.drawOffer === 0 ? ai : bi].id;
-    OT.drawOffer = null;
+    const g = gameOfId(fromId);
+    if (!g || g.drawOffer == null) return;
+    const offererId = OT.players[g.drawOffer === 0 ? g.a : g.b].id;
+    g.drawOffer = null;
     if (offererId === HOST_ID) toast('Draw declined');
     else window.Net.sendTo(offererId, { t: 'draw-declined' });
   }
-  function hostEndDraw() {
-    const [ai, bi] = OT.pair;
-    OT.players[ai].d++; OT.players[bi].d++; OT.players[ai].pts++; OT.players[bi].pts++;
-    OT.current++;
-    OT.G = null;
-    const done = OT.current >= OT.schedule.length;
+  // end one game: award points, free both players (after a cooldown), then schedule their next match
+  function hostEndGame(gi, winSlot, draw) {
+    const g = OT.live.get(gi);
+    if (!g || g.done) return;
+    g.done = true;
+    g.state.winner = draw ? 'draw' : winSlot;
+    const a = g.a, b = g.b;
+    if (draw) { OT.players[a].d++; OT.players[b].d++; OT.players[a].pts++; OT.players[b].pts++; }
+    else { awardMatch(a, b, winSlot); g.winnerName = OT.players[winSlot === 0 ? a : b].name; }
+    const now = performance.now();
+    OT.live.delete(gi);
+    OT.busy.delete(a); OT.busy.delete(b);
+    OT.gameOf.delete(OT.players[a].id); OT.gameOf.delete(OT.players[b].id);
+    OT.coolUntil.set(a, now + COOLDOWN); OT.coolUntil.set(b, now + COOLDOWN);
     const rows = sortRows(OT.players);
-    window.Net.broadcast({ t: 'result', draw: true, rows, done });
-    showWin('Draw', done ? 'Final match done.' : 'On to the next match.');
-  }
-  function hostEndMatch(winSlot) {
-    const [ai, bi] = OT.pair;
-    awardMatch(ai, bi, winSlot);
-    OT.current++;
-    OT.G = null;
-    const winner = OT.players[winSlot === 0 ? ai : bi].name;
-    const done = OT.current >= OT.schedule.length;
-    const rows = sortRows(OT.players);
-    window.Net.broadcast({ t: 'result', winner, rows, done });
-    showWin(`${winner} wins`, done ? 'Final match done.' : 'On to the next match.');
+    window.Net.broadcast({ t: 'state', gi, s: serState(g.state), clk: g.clock ? g.clock.rem : null });
+    window.Net.broadcast({ t: 'gameresult', gi, winner: draw ? null : g.winnerName, draw: !!draw, rows });
+    if (M && M.mode === 'otour' && M.view === gi) {     // host was at this board → drop to ranking
+      if (gi === OT.myGame) { OT.myGame = -1; OT.viewCoolUntil = now + COOLDOWN; scheduleCoolRefresh(); }
+      toast(draw ? 'Draw' : `${g.winnerName} wins`);
+      showOtourStandings();
+    } else if ($('#tournament-standings').classList.contains('is-active')) showHostStandings();
+    if (OT.schedule.every(m => m.played) && OT.live.size === 0) return hostFinish();
+    setTimeout(() => hostSchedule(), COOLDOWN);          // launch the freed players' next match
   }
   function hostFinish() {
-    const rows = sortRows(OT.players);
-    window.Net.broadcast({ t: 'result', winner: rows[0].name, rows, done: true, crown: true });
+    OT.done = true;
+    hostStopClock();
+    window.Net.broadcast({ t: 'done', rows: sortRows(OT.players) });
     showHostStandings();
   }
   function showHostStandings() {
-    const done = OT.current >= OT.schedule.length;
-    const headline = done ? `${sortRows(OT.players)[0].name} takes the crown`
-      : `Match ${OT.current + 1} of ${OT.schedule.length} — ${OT.players[OT.schedule[OT.current][0]].name} vs ${OT.players[OT.schedule[OT.current][1]].name}`;
-    fillLeaderboard(sortRows(OT.players), headline, done ? 'Back to menu' : 'Play next match', done, 'Online tournament');
+    stopClock();
+    if (M) { M.view = -1; M.playing = false; M.spectating = false; }
+    const liveN = OT.live ? OT.live.size : 0;
+    const pending = OT.schedule ? OT.schedule.filter(m => !m.played).length : 0;
+    const headline = OT.done ? `${sortRows(OT.players)[0].name} takes the crown`
+      : liveN ? `${liveN} game${liveN > 1 ? 's' : ''} live${pending ? ` · ${pending} to come` : ''}`
+        : (pending ? 'Setting up…' : 'Wrapping up…');
+    // matches launch on their own; the host only leaves at the end
+    fillLeaderboard(sortRows(OT.players), headline, OT.done ? 'Back to menu' : '', OT.done, 'Online tournament', hostKick);
+    renderLiveGames();
+    showOtourChat();
     showScreen('tournament-standings');
   }
-  function hostPlayNext() {
-    if (OT.current >= OT.schedule.length) return leaveOtour();
-    hostNextMatch();
-  }
+  function hostPlayNext() { leaveOtour(); }   // the "Back to menu" button, shown only when done
 
   // ---------- online tournament: client ----------
   function onClientEvent(ev) {
@@ -778,49 +1005,97 @@
     if (!OT || OT.host) return;
     if (msg.t === 'lobby') { OT.names = msg.names; if ($('#otour-lobby').classList.contains('is-active')) renderLobby(); }
     else if (msg.t === 'too-late') { toast('Tournament already started'); leaveOtour(); }
-    else if (msg.t === 'start') {
-      setupOtourMatch(msg.role, msg.a, msg.b, false, msg.clk);
-      render();
-      startClock();
-    } else if (msg.t === 'state') {
-      if (M && M.mode === 'otour') {
-        M.state = deState(msg.s);
+    else if (msg.t === 'kicked') { toast('Removed by the host'); leaveOtour(); }
+    else if (msg.t === 'chat') { addChat(msg.name, msg.text); }
+    else if (msg.t === 'begin') {
+      OT.started = true; OT.done = false;
+      OT.live = new Map(); OT.lastRows = msg.rows || [];
+      OT.myGame = -1; OT.mySeat = -1; OT.viewCoolUntil = 0;
+      ensureOtourM();
+      showClientStandings();
+    }
+    else if (msg.t === 'gamestart') {
+      if (!OT.live) OT.live = new Map();
+      OT.live.set(msg.gi, { gi: msg.gi, aName: msg.a, bName: msg.b, state: null, clock: null, done: false });
+      if ($('#tournament-standings').classList.contains('is-active')) showClientStandings();
+    }
+    else if (msg.t === 'youplay') {
+      OT.myGame = msg.gi; OT.mySeat = msg.seat; OT.viewCoolUntil = 0;
+      viewGame(msg.gi);
+    }
+    else if (msg.t === 'state') {
+      const g = OT.live && OT.live.get(msg.gi); if (!g) return;
+      g.state = deState(msg.s);
+      if (msg.clk) g.clock = { rem: msg.clk.slice() };
+      if (M && M.mode === 'otour' && M.view === msg.gi) {
+        M.state = g.state;
         if (M.clock && msg.clk) { M.clock.rem = msg.clk.slice(); M.clock.last = performance.now(); }
         render();
       }
-    } else if (msg.t === 'draw-offer') {
-      if (M && M.mode === 'otour' && M.playing) openDrawPrompt('otour');
-    } else if (msg.t === 'draw-declined') {
-      toast('Draw declined');
-    } else if (msg.t === 'result') {
-      OT.lastRows = msg.rows; OT.done = msg.done;
-      if (msg.draw) showWin('Draw', msg.done ? 'Tournament over.' : 'Updating standings…');
-      else showWin(msg.done ? `${msg.winner} takes the crown` : `${msg.winner} wins`, msg.done ? 'Tournament over.' : 'Updating standings…');
     }
+    else if (msg.t === 'gameresult') {
+      OT.lastRows = msg.rows || OT.lastRows;
+      const viewing = M && M.mode === 'otour' && M.view === msg.gi;
+      const mine = msg.gi === OT.myGame;
+      if (OT.live) OT.live.delete(msg.gi);
+      if (mine) { OT.myGame = -1; OT.viewCoolUntil = performance.now() + COOLDOWN; scheduleCoolRefresh(); }
+      if (viewing) { toast(msg.draw ? 'Draw' : `${msg.winner} wins`); showClientStandings(); }
+      else if ($('#tournament-standings').classList.contains('is-active')) showClientStandings();
+    }
+    else if (msg.t === 'done') {
+      OT.lastRows = msg.rows || OT.lastRows; OT.done = true; OT.live = new Map();
+      showClientStandings();
+    }
+    else if (msg.t === 'draw-offer') { if (M && M.mode === 'otour' && OT.myGame >= 0) openDrawPrompt('otour'); }
+    else if (msg.t === 'draw-declined') { toast('Draw declined'); }
   }
   function showClientStandings() {
+    stopClock();
+    if (M) { M.view = -1; M.playing = false; M.spectating = false; }
     const rows = (OT && OT.lastRows) || [];
-    const headline = OT && OT.done ? `${rows[0] ? rows[0].name : ''} takes the crown` : 'Waiting for the host…';
+    const liveN = (OT && OT.live) ? OT.live.size : 0;
+    const headline = OT && OT.done ? `${rows[0] ? rows[0].name : ''} takes the crown`
+      : (OT && OT.started) ? (liveN ? `${liveN} game${liveN > 1 ? 's' : ''} live` : 'Waiting for your next match…')
+        : 'Waiting for the host…';
     fillLeaderboard(rows, headline, OT && OT.done ? 'Back to menu' : '', OT && OT.done, 'Online tournament');
+    renderLiveGames();
+    showOtourChat();
     showScreen('tournament-standings');
   }
 
-  function setupOtourMatch(role, aName, bName, host, clk) {
-    M = {
-      state: R.createState(),
-      mode: 'otour',
-      orient: 'h',
-      net: null,
-      otour: { host: !!host, role },
-      seat: role === 'b' ? 1 : 0,
-      playing: role === 'a' || role === 'b',
-      names: [aName, bName],
-      clock: clk ? { rem: clk.slice(), bonus: 0, last: performance.now() } : null,
-    };
-    setControls();
-    drag = null;
-    closeOverlay('overlay'); closeOverlay('draw-prompt');
-    showScreen('game');
+  function showOtourChat() { $('#ts-chat').hidden = false; renderChat(); }
+  function showOtourStandings() { if (OT) { closeOverlay('overlay'); closeOverlay('draw-prompt'); OT.host ? showHostStandings() : showClientStandings(); } }
+  // games in progress, each watchable — except during your between-match cooldown (buttons hidden)
+  function renderLiveGames() {
+    const box = $('#live-games');
+    if (!box) return;
+    box.innerHTML = '';
+    const games = (OT && OT.live) ? [...OT.live.values()] : [];
+    const cooling = !!(OT && OT.viewCoolUntil && performance.now() < OT.viewCoolUntil);
+    const show = OT && OT.started && !OT.done && (games.length || cooling);
+    box.hidden = !show;
+    if (!show) return;
+    if (cooling) {
+      const note = document.createElement('div');
+      note.className = 'lg-cool';
+      note.textContent = 'Take a breath — your next match starts shortly…';
+      box.appendChild(note);
+    }
+    games.forEach(g => {
+      const row = document.createElement('div');
+      row.className = 'lg-row';
+      const dot = document.createElement('span'); dot.className = 'lg-dot';
+      const label = document.createElement('span'); label.className = 'lg-label';
+      label.textContent = `${gameName(g, 0)} vs ${gameName(g, 1)}`;
+      row.append(dot, label);
+      if (!cooling) {   // spectate buttons are hidden during the cooldown breather
+        const btn = document.createElement('button'); btn.className = 'lg-watch';
+        btn.textContent = g.gi === OT.myGame ? 'Resume' : 'Watch';
+        btn.addEventListener('click', () => viewGame(g.gi));
+        row.appendChild(btn);
+      }
+      box.appendChild(row);
+    });
   }
 
   // ---------- rendering ----------
@@ -932,7 +1207,7 @@
     const s = M.state;
     if (drag?.locked || s.winner !== null) return;
     if (M.mode === 'otour') statusEl.textContent = !M.playing ? `Spectating · ${nameOf(s.turn)} to move`
-      : (M.seat === s.turn ? 'Your turn' : "Opponent's turn");
+      : (OT.mySeat === s.turn ? 'Your turn' : "Opponent's turn");
     else if (M.net) statusEl.textContent = M.net.myPlayer === s.turn ? 'Your turn' : "Opponent's turn";
     else if (hotseat()) statusEl.textContent = `${nameOf(s.turn)} to move`;
     else statusEl.textContent = s.turn === 0 ? 'Your turn' : 'Bot thinking…';
@@ -1007,12 +1282,7 @@
   // ---------- online (friend room code) ----------
   function openOnline() {
     pendingRole = null;
-    $('#online-choice').hidden = false;
-    $('#room-display').hidden = true;
-    $('#online-status').textContent = '';
-    $('#join-code').value = '';
-    $('#create-room').disabled = false;
-    $('#join-room').disabled = false;
+    resetOnlineScreen();
     showScreen('online');
   }
   const setOnlineStatus = msg => { $('#online-status').textContent = msg; };
@@ -1021,14 +1291,14 @@
   function onNetEvent(ev) {
     switch (ev.type) {
       case 'open':
-        // the host fixes the settings and sends them; the guest waits for that config
-        if (pendingRole === 'host') { const st = mySettings(); window.Net.send({ type: 'config', settings: st }); startNetMatch('host', 0, st); }
+        // the host fixes the settings and sends them (with its name); the guest waits for that config
+        if (pendingRole === 'host') { const st = mySettings(); const first = randomTurn(); window.Net.send({ type: 'config', settings: st, name: myName(), first }); startNetMatch('host', 0, st, first); }
         break;
       case 'data':
         handleNetData(ev.msg);
         break;
       case 'close':
-        if (M && M.mode === 'net') { M.net.connected = false; stopClock(); closeOverlay('overlay'); showScreen('menu'); toast('Opponent disconnected'); }
+        if (M && M.mode === 'net') { M.net.connected = false; netPeerName = null; stopClock(); closeOverlay('overlay'); closeOverlay('rematch-prompt'); showScreen('menu'); toast('Opponent disconnected'); }
         break;
       case 'error':
         handleNetError(ev.err);
@@ -1048,10 +1318,32 @@
   }
 
   function handleNetData(msg) {
-    if (msg.type === 'config') { startNetMatch('guest', 1, msg.settings); return; }
+    if (msg.type === 'config') {
+      netPeerName = msg.name || null;
+      window.Net.send({ type: 'name', name: myName() });   // tell the host who we are
+      startNetMatch('guest', 1, msg.settings, msg.first);
+      return;
+    }
     if (!M || M.mode !== 'net') return;
     const s = M.state;
-    if (msg.type === 'rematch') return startNetMatch(M.net.role, M.net.myPlayer);
+    if (msg.type === 'name') { netPeerName = msg.name || null; render(); return; }
+    if (msg.type === 'rematch') {
+      netRematch.opp = true;
+      if (netRematch.me) reachRematch();   // we already wanted it → both agree
+      else openRematchPrompt();            // ask permission
+      return;
+    }
+    if (msg.type === 'rematch-go') {        // host's signal to start the agreed rematch
+      startNetMatch('guest', 1, msg.settings || M.settings, msg.first);
+      return;
+    }
+    if (msg.type === 'rematch-decline') {
+      netRematch = { me: false, opp: false };
+      closeOverlay('rematch-prompt');
+      resetRematchButton();
+      toast('Rematch declined');
+      return;
+    }
     if (msg.type === 'forfeit') {
       if (s.winner === null) { s.winner = M.net.myPlayer; showWin('You win', 'Opponent forfeited.'); }
       return;
@@ -1110,18 +1402,6 @@
     } catch { toast(text); }
   }
 
-  // ---------- share ----------
-  async function share() {
-    let text;
-    if (M.state.winner === 'draw') text = 'We drew a game of Detour.';
-    else if (M.net) text = M.state.winner === M.net.myPlayer ? 'I won a game of Detour.' : 'I lost a game of Detour.';
-    else if (M.mode === 'local') text = `Player ${M.state.winner + 1} won a game of Detour.`;
-    else text = M.state.winner === 0 ? `I beat the ${M.difficulty} bot at Detour.` : `The ${M.difficulty} bot beat me at Detour.`;
-    try { if (navigator.share) { await navigator.share({ title: 'Detour', text }); return; } } catch { return; }
-    try { await navigator.clipboard.writeText(text); toast('Result copied'); return; } catch { /* fall through */ }
-    fallbackCopy(text, () => toast('Result copied'));
-  }
-
   // ---------- wiring ----------
   function openDifficulty() { renderRecords(); openOverlay('difficulty'); }
 
@@ -1152,8 +1432,18 @@
   $('#continue-btn').addEventListener('click', onContinue);
   $('#draw-accept').addEventListener('click', drawAccept);
   $('#draw-decline').addEventListener('click', drawDecline);
-  $('#share-btn').addEventListener('click', share);
+  $('#rematch-accept').addEventListener('click', rematchAccept);
+  $('#rematch-deny').addEventListener('click', rematchDeny);
   $('#rotate-btn').addEventListener('click', () => setOrient(M.orient === 'h' ? 'v' : 'h'));
+  // Space toggles wall orientation while it's your turn to place
+  document.addEventListener('keydown', e => {
+    if (e.code !== 'Space' && e.key !== ' ') return;
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (drag || !$('#game').classList.contains('is-active') || !interactive()) return;
+    e.preventDefault();
+    setOrient(M.orient === 'h' ? 'v' : 'h');
+  });
 
   $('#online-back').addEventListener('click', () => { window.Net.close(); showScreen('menu'); });
   $('#create-room').addEventListener('click', createRoom);
@@ -1174,6 +1464,14 @@
   $('#ote-code').addEventListener('keydown', e => { if (e.key === 'Enter') otourJoin(); });
   $('#otl-back').addEventListener('click', leaveOtour);
   $('#otl-start').addEventListener('click', hostStartTournament);
+  $$('[data-chat-form]').forEach(form => form.addEventListener('submit', e => {
+    e.preventDefault();
+    const input = form.querySelector('[data-chat-input]');
+    if (!input) return;
+    const text = input.value;
+    input.value = '';
+    sendChat(text);
+  }));
 
   const nameInput = $('#player-name');
   nameInput.value = loadName();
