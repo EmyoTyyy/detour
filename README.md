@@ -43,7 +43,22 @@ No game server: the **host's browser is the hub**. Other players connect to it o
 - **The host must stay connected** — if the host leaves, the tournament ends for everyone (no host migration).
 - A player who **resigns** concedes their current game but stays in; a player who **disconnects** is auto-forfeited from their remaining games so the bracket keeps moving.
 - **Who starts is random** each game (no fixed first-move advantage), decided by the host.
-- Needs internet (the PeerJS broker). Connections use several STUN servers plus a free public **TURN** relay (Open Relay) so peers behind strict/symmetric NATs can still connect; if a connection still can't be made within ~30s the player gets a clear "couldn't connect" message instead of a silent hang. **Phones on cellular data almost always need TURN**, and the free public relay can be rate-limited or flaky — for reliable mobile play, drop your own TURN credentials (metered.ca free tier, or Twilio) into `net.js` (`PEER_OPTS`). A truly offline LAN tournament still needs a local hub server.
+- Needs internet (the PeerJS broker). Connections use several STUN servers plus a **TURN** relay so peers behind strict/symmetric NATs can still connect; if a connection still can't be made within ~30s the player gets a clear "couldn't connect" message instead of a silent hang. **Phones on cellular data almost always need TURN**, and the public fallback relay can be rate-limited or flaky. For reliable, still-free mobile play, paste your own **metered.ca** free-tier credentials into the config block at the top of `net.js` (`METERED_SUBDOMAIN` / `METERED_API_KEY`) — the browser then fetches fresh TURN credentials at connect time; see **Free TURN setup** below. A truly offline LAN tournament still needs a local hub server.
+
+### Free TURN setup (fixes phone joining, no backend, no cost)
+
+TURN is the relay that carries traffic when two peers can't reach each other directly — which is the normal case on cellular. The site stays a static GitHub Pages app; only the relay is external.
+
+1. Create a free account at [metered.ca](https://www.metered.ca/) (free tier is ~50 GB/month — plenty for casual play).
+2. In the dashboard, find your **app subdomain** (e.g. `yourapp.metered.live`) and your **API key**.
+3. Open `net.js` and fill in the two constants near the top:
+   ```js
+   const METERED_SUBDOMAIN = 'yourapp';   // → yourapp.metered.live
+   const METERED_API_KEY   = 'your-key';
+   ```
+4. Commit and push. That's it — when someone opens an online screen the browser fetches fresh TURN credentials and uses them; if the fetch fails it falls back to the public servers.
+
+Notes: the API key lives in client-side JS, so it's **public** — that's unavoidable for a backend-less static site, and the metered key only authorizes TURN-credential requests against your (rate-limited, free) quota. Alternatives if you'd rather: **Cloudflare**'s TURN service (generous free allotment), or self-hosting **coturn** on an always-free cloud VM (e.g. Oracle Cloud Always Free) and putting that server's static credentials into `FALLBACK_TURN`.
 
 ## Online play
 
@@ -66,7 +81,9 @@ Cards are grouped into **Solo** (vs Bot, Freeplay), **Local network** (LAN Lobby
 
 Each player has 10 walls, drawn down from the tray as you place them.
 
-The game header's controls depend on the mode: **Restart** (↺) in freeplay only; **Resign** (⚑, red on hover) and **Draw** (½) in friend games and in local/online tournaments; bot games have neither (use **Back** to leave, then Rematch from the result card to replay). Draw asks the other player to agree — face-to-face for hotseat, or as an offer the opponent accepts/declines over the network (online tournaments route it through the host).
+The game header's controls depend on the mode: **Restart** (↺) in freeplay only; **Resign** (⚑, red on hover) and **Draw** (½) in friend games and in local/online tournaments; bot games have neither (use **Back** to leave, then Rematch from the result card to replay). **Resign and Draw ask for confirmation first** so you can't trigger them by accident. Draw then asks the other player to agree — face-to-face for hotseat, or as an offer the opponent accepts/declines over the network (online tournaments route it through the host).
+
+If a network game loses its connection — including the silent kind (a phone changing networks or going to sleep) — a **Connection lost** popup appears instead of leaving you stuck: peers exchange a heartbeat, so a connection that goes quiet for ~20s is treated as dropped.
 
 ## Look & feel
 

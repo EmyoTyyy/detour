@@ -277,6 +277,32 @@
     showWin('You resigned', 'You bailed on the race.');
   }
 
+  // ---------- confirm (resign / draw) ----------
+  let confirmCb = null;
+  function confirmAction(title, body, onYes) {
+    confirmCb = onYes;
+    $('#confirm-title').textContent = title;
+    $('#confirm-text').textContent = body;
+    openOverlay('confirm-prompt');
+  }
+  function confirmYes() { closeOverlay('confirm-prompt'); const cb = confirmCb; confirmCb = null; if (cb) cb(); }
+  function confirmNo() { closeOverlay('confirm-prompt'); confirmCb = null; }
+
+  // ---------- connection lost ----------
+  function showDisconnect(msg) {
+    stopClock(); hostStopClock();
+    ['overlay', 'draw-prompt', 'rematch-prompt', 'confirm-prompt'].forEach(closeOverlay);
+    $('#disconnect-text').textContent = msg || 'You lost your connection.';
+    openOverlay('disconnect-prompt');
+  }
+  function dismissDisconnect() {
+    closeOverlay('disconnect-prompt');
+    try { window.Net.close(); } catch { /* ignore */ }
+    OT = null; M = null;
+    showScreen('menu');
+    renderRecords();
+  }
+
   function leaveMatch() {
     if (M && M.mode === 'otour') {            // Back from any board returns to the ranking page
       if (M.view >= 0) { stopClock(); return showOtourStandings(); }
@@ -779,7 +805,7 @@
       return;
     }
     const p = OT.players.find(x => x.id === id);
-    if (p) p.left = true;
+    if (p) { p.left = true; toast(`${p.name} disconnected`); }
     const gi = OT.gameOf && OT.gameOf.get(id);
     const g = (gi != null) ? OT.live.get(gi) : null;
     if (g && !g.done) {
@@ -1007,7 +1033,7 @@
   function onClientEvent(ev) {
     if (ev.type === 'open') { window.Net.sendHost({ t: 'hello', name: myName() }); showLobby(); }
     else if (ev.type === 'data') clientOnData(ev.msg);
-    else if (ev.type === 'close') { toast('Disconnected from host'); leaveOtour(); }
+    else if (ev.type === 'close') { showDisconnect('You were disconnected from the host.'); }
     else if (ev.type === 'error') {
       const t = ev.err && ev.err.type;
       $('#ote-status').textContent = t === 'peer-unavailable' ? 'No tournament with that code.'
@@ -1331,7 +1357,7 @@
         handleNetData(ev.msg);
         break;
       case 'close':
-        if (M && M.mode === 'net') { M.net.connected = false; netPeerName = null; stopClock(); closeOverlay('overlay'); closeOverlay('rematch-prompt'); showScreen('menu'); toast('Opponent disconnected'); }
+        if (M && M.mode === 'net') { M.net.connected = false; netPeerName = null; showDisconnect('Your opponent disconnected.'); }
         break;
       case 'error':
         handleNetError(ev.err);
@@ -1460,8 +1486,14 @@
   $('#menu-btn').addEventListener('click', leaveMatch);
   $('#restart-btn').addEventListener('click', requestRematch);
   $('#rematch-btn').addEventListener('click', requestRematch);
-  $('#forfeit-btn').addEventListener('click', forfeit);
-  $('#draw-btn').addEventListener('click', offerDraw);
+  $('#forfeit-btn').addEventListener('click', () => confirmAction('Resign the game?', 'You concede this match to your opponent.', forfeit));
+  $('#draw-btn').addEventListener('click', () => {
+    if (M && (M.net || M.mode === 'otour')) confirmAction('Offer a draw?', 'Your opponent will be asked to accept.', offerDraw);
+    else offerDraw();   // local tournament shows its own agree-to-draw prompt
+  });
+  $('#confirm-yes').addEventListener('click', confirmYes);
+  $('#confirm-no').addEventListener('click', confirmNo);
+  $('#disconnect-ok').addEventListener('click', dismissDisconnect);
   $('#continue-btn').addEventListener('click', onContinue);
   $('#draw-accept').addEventListener('click', drawAccept);
   $('#draw-decline').addEventListener('click', drawDecline);
