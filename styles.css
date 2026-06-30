@@ -29,10 +29,12 @@
   --r-lg: 20px;
   --r-xl: 26px;
 
-  /* shadows tinted toward the background, single light source from above */
-  --shadow-1: 0 1px 0 #ffffff08, 0 6px 16px -8px #04070bcc;
-  --shadow-2: 0 1px 0 #ffffff0a, 0 18px 44px -16px #04070be0;
-  --shadow-press: inset 0 2px 6px -2px #04070b80;
+  /* flat surfaces: definition comes from 1px borders + background steps, not bevels.
+     one soft, neutral elevation shadow is kept only for things that truly float (modals,
+     the board, the toast) — no white highlight lines, no inset "pressed" depth. */
+  --shadow-1: 0 0 0 0 transparent;
+  --shadow-2: 0 16px 40px -24px #04070b;
+  --shadow-press: 0 0 0 0 transparent;
 
   --cell: clamp(28px, 8.4vmin, 56px);
   --gap: clamp(8px, 1.7vmin, 13px);
@@ -155,11 +157,11 @@ body::after {
 .menu-group:nth-child(2) .game-card { animation-delay: .10s; }
 .menu-group:nth-child(3) .game-card { animation-delay: .16s; }
 .game-card:not(.disabled):hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   background: var(--surface-2);
-  box-shadow: var(--shadow-2), inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, var(--line));
 }
-.game-card:not(.disabled):active { transform: translateY(-1px); box-shadow: var(--shadow-press), inset 0 0 0 1px var(--line); }
+.game-card:not(.disabled):active { transform: translateY(0); box-shadow: inset 0 0 0 1px var(--line); }
 .game-card.disabled { opacity: .5; cursor: default; }
 
 .card-icon {
@@ -171,7 +173,6 @@ body::after {
   border-radius: var(--r-sm);
   background: var(--surface-3);
   color: var(--accent);
-  box-shadow: inset 0 1px 0 #ffffff0a;
 }
 .card-icon svg { width: 22px; height: 22px; }
 .game-card.disabled .card-icon { color: var(--muted); }
@@ -211,9 +212,30 @@ body::after {
 .name-field label { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
 .name-field .text-input { text-align: center; font-weight: 600; }
 
-.settings-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: -8px; }
+.settings-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 .setting { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .setting span { font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+
+/* settings block on a host/setup surface (overlay or tournament card) */
+.setup-block { display: flex; flex-direction: column; gap: 9px; }
+.setup-block[hidden] { display: none; }
+.setup-label { font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+.overlay-card .setup-block { margin-bottom: 22px; }
+.settings-row[hidden] { display: none; }   /* the .settings-row class would otherwise beat [hidden] */
+
+/* read-only settings (a tournament guest viewing the host's choices) */
+.set-value {
+  width: 72px;
+  padding: 9px 10px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .num-input {
   width: 72px;
   padding: 9px 10px;
@@ -229,6 +251,30 @@ body::after {
   font-variant-numeric: tabular-nums;
 }
 .num-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* custom +/- steppers wrapping the number inputs (native spinners hidden) */
+.stepper { display: flex; align-items: stretch; gap: 5px; }
+.stepper .num-input { width: 46px; }
+.step-btn {
+  flex: 0 0 auto;
+  width: 26px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .16s var(--ease), box-shadow .16s var(--ease), color .16s var(--ease), transform .12s var(--spring);
+}
+.step-btn:hover { background: var(--surface-2); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, var(--line)); color: var(--accent); }
+.step-btn:active { transform: translateY(1px); }
+.num-input::-webkit-outer-spin-button,
+.num-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.num-input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* ---------- Sub-screens (online + tournaments): a back button top-left, content centered ---------- */
 .sheet {
@@ -258,7 +304,7 @@ body::after {
   transition: background .18s var(--ease), box-shadow .18s var(--ease), color .18s var(--ease), transform .18s var(--spring);
 }
 .back-btn:hover { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, var(--line)); }
-.back-btn:active { transform: translateY(1px); box-shadow: var(--shadow-press); }
+.back-btn:active { transform: translateY(1px); }
 .back-arrow { width: 20px; height: 20px; display: block; flex: 0 0 auto; }
 /* in the game hud the back button sits inline with the status + action buttons */
 .hud .back-btn { align-self: auto; }
@@ -292,7 +338,7 @@ body::after {
   border: none;
   border-radius: var(--r-sm);
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line), var(--shadow-press);
+  box-shadow: inset 0 0 0 1px var(--line);
   color: var(--text);
   font-family: inherit;
   font-size: 21px;
@@ -305,6 +351,7 @@ body::after {
 .code-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }
 
 #room-display { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 2px; }
+#room-display[hidden] { display: none; }   /* the ID rule above otherwise overrode the hidden attribute, leaking a "----" code block onto the menu */
 .room-label { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
 .room-code {
   font-size: 42px;
@@ -329,7 +376,7 @@ body::after {
   border: none;
   border-radius: var(--r-sm);
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line), var(--shadow-press);
+  box-shadow: inset 0 0 0 1px var(--line);
   color: var(--text);
   font-family: inherit;
   font-size: 15px;
@@ -342,7 +389,7 @@ body::after {
   margin: auto;
   width: min(420px, 94vw);
   border-radius: var(--r-lg);
-  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  background: var(--surface-2);
   box-shadow: var(--shadow-2), inset 0 0 0 1px var(--line);
   overflow: hidden;
   animation: rise .4s var(--ease) both;
@@ -352,7 +399,7 @@ body::after {
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  background: linear-gradient(180deg, var(--surface-3), var(--surface-2));
+  background: var(--surface-3);
   box-shadow: inset 0 -1px 0 var(--line);
 }
 
@@ -517,6 +564,86 @@ body::after {
   gap: 10px;
 }
 
+/* play area — stacked on phones, three columns (info · board · moves) on wide screens */
+.play {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.match-actions { display: flex; gap: 10px; justify-content: center; }
+.match-actions[hidden] { display: none; }
+
+/* ---------- Move list (chess-style, absolute coordinates) ---------- */
+.moves {
+  width: min(560px, 96vw);
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  overflow: hidden;
+}
+.moves-head {
+  padding: 10px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--faint);
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+.moves-list { flex: 1; overflow-y: auto; padding: 3px 0; }
+.moves-list:empty::after {
+  content: "No moves yet";
+  display: block;
+  padding: 18px 16px;
+  font-size: 13px;
+  color: var(--faint);
+  text-align: center;
+}
+.mv-row { display: grid; grid-template-columns: 36px 1fr 1fr; align-items: stretch; }
+.mv-row:nth-child(even) { background: #ffffff05; }
+.mv-no {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--faint); font-size: 12px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  box-shadow: inset -1px 0 0 var(--line-soft);
+}
+.mv-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.mv-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.mv-wall { width: 15px; height: 5px; border-radius: 2px; flex: 0 0 auto; }
+.mv-wall.v { width: 5px; height: 15px; }
+.mv-me .mv-dot, .mv-me .mv-wall { background: var(--me); }
+.mv-opp .mv-dot, .mv-opp .mv-wall { background: var(--opp); }
+.mv-empty { color: transparent; }
+
+/* right side column: move list, plus the tournament chat while playing */
+.side-right { width: min(560px, 96vw); display: flex; flex-direction: column; gap: 12px; }
+.side-right .moves, .side-right .game-chat { width: auto; }
+.game-chat { margin: 0; }
+.game-chat .chat-log { max-height: 150px; }
+.game-chat[hidden] { display: none; }
+.chat-head {
+  padding: 10px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--faint);
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+
 .icon-btn {
   flex: 0 0 auto;
   width: 40px;
@@ -532,7 +659,7 @@ body::after {
   transition: background .18s var(--ease), box-shadow .18s var(--ease), color .18s var(--ease);
 }
 .icon-btn:hover { background: var(--surface-2); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, var(--line)); }
-.icon-btn:active { box-shadow: var(--shadow-press); }
+.icon-btn:active { transform: translateY(1px); }
 .forfeit-btn { color: var(--muted); font-size: 18px; }
 .forfeit-btn:hover { color: var(--danger); background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger); }
 
@@ -599,14 +726,13 @@ body::after {
   height: 9px;
   border-radius: 3px;
   touch-action: none;
-  box-shadow: 0 1px 2px #04070b80, inset 0 1px 0 #ffffff30;
   transition: transform .12s var(--spring);
 }
 .wtoken.grab { cursor: grab; }
 .wtoken.grab:hover { transform: translateY(-2px); }
 .wtoken.vert { width: 9px; height: 26px; }
-.wtoken.mine { background: linear-gradient(color-mix(in srgb, var(--me) 92%, #fff 8%), color-mix(in srgb, var(--me) 60%, #000 40%)); }
-.wtoken.opp { background: linear-gradient(color-mix(in srgb, var(--opp) 92%, #fff 8%), color-mix(in srgb, var(--opp) 60%, #000 40%)); }
+.wtoken.mine { background: var(--me); }
+.wtoken.opp { background: var(--opp); }
 
 .rotate-btn {
   flex: 0 0 auto;
@@ -625,6 +751,7 @@ body::after {
   transition: background .16s var(--ease), box-shadow .16s var(--ease);
 }
 .rotate-btn:hover { background: var(--surface-2); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.rotate-btn[hidden] { display: none; }   /* display:inline-flex above otherwise overrode the hidden attribute (top button leaked into online opponents' rail) */
 .rotate-glyph { font-size: 15px; line-height: 1; color: var(--accent); }
 
 .tray-hint { font-size: 11.5px; color: var(--faint); letter-spacing: .03em; height: 14px; }
@@ -633,9 +760,42 @@ body::after {
 .board-wrap {
   padding: 12px;
   border-radius: var(--r-lg);
-  background: linear-gradient(180deg, var(--surface), #11151a);
-  box-shadow: var(--shadow-2), inset 0 0 0 1px var(--line-soft), inset 0 2px 10px -4px #04070b;
+  background: var(--surface);
+  box-shadow: var(--shadow-2), inset 0 0 0 1px var(--line-soft);
 }
+
+/* coordinate frame: rank numbers down the left, file letters across the bottom */
+.board-frame {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  justify-content: center;
+}
+.ranks {
+  grid-row: 1;
+  grid-column: 1;
+  display: grid;
+  grid-template-rows: var(--cell) repeat(8, var(--gap) var(--cell));
+  padding-right: 7px;
+}
+.board-frame > .board { grid-row: 1; grid-column: 2; }
+.files {
+  grid-row: 2;
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: var(--cell) repeat(8, var(--gap) var(--cell));
+  padding-top: 5px;
+}
+.ranks span, .files span {
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
 .board {
   display: grid;
   grid-template-columns: var(--cell) repeat(8, var(--gap) var(--cell));
@@ -645,20 +805,19 @@ body::after {
 .board.flip { transform: rotate(180deg); }
 
 .cell {
-  background: linear-gradient(160deg, var(--surface-3), var(--surface-2));
+  background: var(--surface-3);
   border-radius: var(--r-xs);
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: inset 0 1px 0 #ffffff08;
   transition: background .12s var(--ease);
 }
-/* winning rows: tinted fill + a bright edge in the owner's colour */
-.cell.goal-top { box-shadow: inset 0 3px 0 var(--gc), inset 0 1px 0 #ffffff08; }
-.cell.goal-bottom { box-shadow: inset 0 -3px 0 var(--gc), inset 0 1px 0 #ffffff08; }
-.cell.mine { --gc: var(--me); background: linear-gradient(160deg, color-mix(in srgb, var(--me) 16%, var(--surface-3)), color-mix(in srgb, var(--me) 9%, var(--surface-2))); }
-.cell.opp { --gc: var(--opp); background: linear-gradient(160deg, color-mix(in srgb, var(--opp) 16%, var(--surface-3)), color-mix(in srgb, var(--opp) 9%, var(--surface-2))); }
+/* winning rows: solid tinted fill + a flat edge bar in the owner's colour */
+.cell.goal-top { box-shadow: inset 0 3px 0 var(--gc); }
+.cell.goal-bottom { box-shadow: inset 0 -3px 0 var(--gc); }
+.cell.mine { --gc: var(--me); background: color-mix(in srgb, var(--me) 13%, var(--surface-3)); }
+.cell.opp { --gc: var(--opp); background: color-mix(in srgb, var(--opp) 13%, var(--surface-3)); }
 
 .cell.movable { cursor: pointer; }
 .cell.movable::after {
@@ -673,26 +832,40 @@ body::after {
 }
 .cell.movable:hover::after { transform: scale(1.25); }
 
+/* pawns are the one deliberately 3D element — a shaded sphere you can pick up */
 .pawn {
   width: 70%;
   height: 70%;
   border-radius: 50%;
   position: relative;
   z-index: 1;
-  box-shadow: 0 4px 9px #04070bcc, inset 0 2px 3px #ffffff55, inset 0 -3px 6px #00000040;
+  box-shadow: 0 3px 6px -1px #04070b99, inset 0 2px 4px #ffffff5e, inset 0 -5px 8px #00000055;
 }
-.pawn.mine { background: radial-gradient(circle at 36% 30%, #c8f2eb, var(--me) 72%, var(--accent-deep)); }
-.pawn.opp { background: radial-gradient(circle at 36% 30%, #ffe0b0, var(--opp) 72%, #cf8632); }
+.pawn.mine { background: radial-gradient(circle at 35% 28%, #d6f5ef 0%, var(--me) 52%, var(--accent-deep) 100%); }
+.pawn.opp { background: radial-gradient(circle at 35% 28%, #ffe4ba 0%, var(--opp) 52%, #c47f2c 100%); }
+.pawn.draggable { cursor: grab; touch-action: none; }
+.pawn.draggable:hover { transform: scale(1.05); }
+.pawn.lifted { opacity: .35; }
+.pawn-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 70;
+}
+/* highlight the legal cell a dragged pawn is hovering */
+.cell.drop { box-shadow: inset 0 0 0 2px var(--accent); }
+.cell.drop::after { transform: scale(1.4); }
 
-/* placed walls — coloured by who placed them */
+/* placed walls — flat, coloured by who placed them */
 .wall {
   position: relative;
   z-index: 2;
-  border-radius: 4px;
-  box-shadow: 0 3px 7px -1px #04070bcc, inset 0 1px 0 #ffffff45, inset 0 -2px 3px #00000050;
+  border-radius: 3px;
 }
-.wall.mine { background: linear-gradient(color-mix(in srgb, var(--me) 90%, #fff 10%), color-mix(in srgb, var(--me) 58%, #000 42%)); }
-.wall.opp { background: linear-gradient(color-mix(in srgb, var(--opp) 90%, #fff 10%), color-mix(in srgb, var(--opp) 58%, #000 42%)); }
+.wall.mine { background: var(--me); }
+.wall.opp { background: var(--opp); }
 
 /* wall drop junctions — live only during a drag */
 .wjunction {
@@ -726,14 +899,14 @@ body::after {
 .drag-ghost {
   position: fixed;
   transform: translate(-50%, -50%);
-  border-radius: 4px;
-  box-shadow: 0 6px 16px #04070be0, inset 0 1px 0 #ffffff45;
+  border-radius: 3px;
+  box-shadow: 0 6px 16px -8px #04070b;
   opacity: .94;
   pointer-events: none;
   z-index: 70;
 }
-.drag-ghost.mine { background: linear-gradient(color-mix(in srgb, var(--me) 90%, #fff 10%), color-mix(in srgb, var(--me) 58%, #000 42%)); }
-.drag-ghost.opp { background: linear-gradient(color-mix(in srgb, var(--opp) 90%, #fff 10%), color-mix(in srgb, var(--opp) 58%, #000 42%)); }
+.drag-ghost.mine { background: var(--me); }
+.drag-ghost.opp { background: var(--opp); }
 
 /* ---------- Overlays ---------- */
 .overlay {
@@ -750,7 +923,7 @@ body::after {
 .overlay.is-active { display: flex; animation: fade .18s var(--ease); }
 .overlay-card {
   width: min(420px, 94vw);
-  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  background: var(--surface-2);
   border-radius: var(--r-xl);
   padding: 30px 26px;
   text-align: center;
@@ -775,14 +948,14 @@ body::after {
   cursor: pointer;
   transition: transform .18s var(--spring), box-shadow .18s var(--ease), background .18s var(--ease);
 }
-.btn:hover { transform: translateY(-2px); background: var(--surface-2); }
-.btn:active { transform: translateY(0); box-shadow: var(--shadow-press); }
+.btn:hover { transform: translateY(-1px); background: var(--surface-2); }
+.btn:active { transform: translateY(1px); }
 .btn.primary {
-  background: linear-gradient(180deg, var(--accent), var(--accent-deep));
-  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--accent) 60%, transparent);
+  background: var(--accent);
+  box-shadow: none;
   color: #062520;
 }
-.btn.primary:hover { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, white), var(--accent)); }
+.btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, white); }
 .btn.ghost { background: none; box-shadow: none; color: var(--muted); }
 .btn.ghost:hover { background: var(--surface); color: var(--text); }
 
@@ -841,6 +1014,57 @@ body::after {
   z-index: 60;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- Wide screens: use the sides (info left, board centre, moves right) ---------- */
+@media (min-width: 1140px) {
+  .hud { width: min(1080px, 96vw); }
+  /* board fills the viewport height — bounded by the width left between the side columns,
+     and a sane cap — so it never overflows. A 9-cell + 8-gap board spans cell*10.8.
+     Set on the frame so the rank/file labels inherit the same cell/gap and stay aligned. */
+  .board-frame {
+    --cell: min(calc((100dvh - 170px) / 10.8), calc((100vw - 530px) / 10.8), 120px);
+    --gap: calc(var(--cell) * 0.22);
+  }
+  .play {
+    display: grid;
+    width: auto;
+    grid-template-columns: 190px max-content 230px;
+    grid-template-rows: auto 1fr auto auto;
+    grid-template-areas:
+      "rtop  board moves"
+      "fill  board moves"
+      "rbot  board moves"
+      "ract  board moves";
+    align-items: start;
+    justify-content: center;
+    gap: 14px;
+  }
+  #rail-top { grid-area: rtop; }
+  .board-wrap { grid-area: board; align-self: center; }
+  #tray { grid-area: rbot; align-self: end; }
+  #match-actions { grid-area: ract; align-self: start; justify-content: flex-start; margin-top: 2px; }
+  .side-right { grid-area: moves; align-self: stretch; width: 230px; }
+  .moves { flex: 1; min-height: 120px; max-height: none; }
+
+  /* rails turn into tall side cards */
+  .rail {
+    width: 190px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-content: start;
+    gap: 10px 8px;
+    padding: 13px 15px;
+    min-height: 0;
+  }
+  .rail-dot { grid-row: 1; grid-column: 1; align-self: center; }
+  .rail-name { grid-row: 1; grid-column: 2; }
+  .rail-clock { grid-row: 1; grid-column: 3; min-width: 0; }
+  .rail-count { grid-row: 2; grid-column: 1 / -1; text-align: left; }
+  .rail-count::before { content: "Walls left · "; color: var(--faint); font-weight: 600; }
+  .rail-top .rail-count::before, .rail-bottom .rail-count::before { color: var(--faint); }
+  .rail-walls { grid-row: 3; grid-column: 1 / -1; flex: 0 0 auto; }
+  #rotate-btn, #rotate-btn-top { grid-row: 4; grid-column: 1 / -1; justify-content: center; }
+}
 
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }

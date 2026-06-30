@@ -26,12 +26,6 @@
         <input id="player-name" class="text-input" maxlength="16" autocomplete="off" spellcheck="false" />
       </div>
 
-      <div class="settings-row">
-        <label class="setting"><span>Clock (min)</span><input id="set-time" class="num-input" type="number" min="0" max="120" step="1" /></label>
-        <label class="setting"><span>Bonus (sec)</span><input id="set-bonus" class="num-input" type="number" min="0" max="60" step="1" /></label>
-        <label class="setting"><span>Walls</span><input id="set-walls" class="num-input" type="number" min="0" max="20" step="1" /></label>
-      </div>
-
       <div class="menu-groups">
         <div class="menu-group">
           <h2 class="group-label">Local</h2>
@@ -116,6 +110,10 @@
       <div class="online-panel">
         <h2 class="panel-title">Play with a Friend</h2>
         <div id="online-choice">
+          <div class="setup-block">
+            <div class="setup-label">Game settings · used when you host</div>
+            <div class="settings-host" id="friend-settings"></div>
+          </div>
           <button class="btn primary big" id="create-room">Create a room</button>
           <div class="online-or">or</div>
           <div class="join-row">
@@ -164,6 +162,11 @@
         <div class="tcard-foot">
           <div class="tjoin"><span class="tjoin-label">Join</span><span class="tjoin-code" id="otl-code">----</span></div>
           <div class="tcard-note" id="otl-status"></div>
+          <div class="setup-block" id="otl-settings-wrap" hidden>
+            <div class="setup-label" id="otl-settings-label">Game settings</div>
+            <div class="settings-host" id="otour-settings"></div>
+            <div class="settings-view" id="otl-settings-view" hidden></div>
+          </div>
           <button class="btn primary big" id="otl-start" hidden disabled>Start tournament</button>
         </div>
       </div>
@@ -184,33 +187,61 @@
           <span>Back</span>
         </button>
         <div class="status" id="status">Your turn</div>
-        <button class="icon-btn" id="restart-btn" title="Restart" aria-label="Restart">↺</button>
-        <button class="icon-btn" id="draw-btn" title="Offer a draw" aria-label="Offer a draw" hidden>½</button>
-        <button class="icon-btn forfeit-btn" id="forfeit-btn" title="Resign" aria-label="Resign" hidden>⚑</button>
       </header>
 
-      <div class="rail rail-top" id="rail-top">
-        <span class="rail-dot"></span>
-        <span class="rail-name" id="far-name">Opponent</span>
-        <span class="rail-count" id="far-count">10</span>
-        <div class="rail-walls" id="opp-inventory" aria-hidden="true"></div>
-        <span class="rail-clock" id="far-clock" hidden>10:00</span>
-      </div>
+      <div class="play">
+        <div class="rail rail-top" id="rail-top">
+          <span class="rail-dot"></span>
+          <span class="rail-name" id="far-name">Opponent</span>
+          <span class="rail-count" id="far-count">10</span>
+          <div class="rail-walls" id="opp-inventory" aria-hidden="true"></div>
+          <button class="rotate-btn" id="rotate-btn-top" title="Rotate wall (Space)" aria-label="Rotate wall" hidden>
+            <span class="rotate-glyph">⤡</span>
+            <span id="orient-label-top">Horizontal</span>
+          </button>
+          <span class="rail-clock" id="far-clock" hidden>10:00</span>
+        </div>
 
-      <div class="board-wrap">
-        <div class="board" id="board"></div>
-      </div>
+        <div class="board-wrap">
+          <div class="board-frame">
+            <div class="ranks" id="ranks" aria-hidden="true"></div>
+            <div class="board" id="board"></div>
+            <div class="files" id="files" aria-hidden="true"></div>
+          </div>
+        </div>
 
-      <div class="rail rail-bottom" id="tray">
-        <span class="rail-dot"></span>
-        <span class="rail-name" id="near-name">You</span>
-        <span class="rail-count" id="near-count">10</span>
-        <div class="rail-walls" id="inventory"></div>
-        <button class="rotate-btn" id="rotate-btn" title="Rotate wall (Space)" aria-label="Rotate wall">
-          <span class="rotate-glyph">⤡</span>
-          <span id="orient-label">Horizontal</span>
-        </button>
-        <span class="rail-clock" id="near-clock" hidden>10:00</span>
+        <div class="rail rail-bottom" id="tray">
+          <span class="rail-dot"></span>
+          <span class="rail-name" id="near-name">You</span>
+          <span class="rail-count" id="near-count">10</span>
+          <div class="rail-walls" id="inventory"></div>
+          <button class="rotate-btn" id="rotate-btn" title="Rotate wall (Space)" aria-label="Rotate wall">
+            <span class="rotate-glyph">⤡</span>
+            <span id="orient-label">Horizontal</span>
+          </button>
+          <span class="rail-clock" id="near-clock" hidden>10:00</span>
+        </div>
+
+        <div class="match-actions" id="match-actions">
+          <button class="icon-btn" id="restart-btn" title="Restart" aria-label="Restart">↺</button>
+          <button class="icon-btn" id="draw-btn" title="Offer a draw" aria-label="Offer a draw" hidden>½</button>
+          <button class="icon-btn forfeit-btn" id="forfeit-btn" title="Resign" aria-label="Resign" hidden>⚑</button>
+        </div>
+
+        <aside class="side-right">
+          <div class="moves" id="moves">
+            <div class="moves-head">Moves</div>
+            <div class="moves-list" id="moves-list"></div>
+          </div>
+          <div class="chat game-chat" id="game-chat" hidden>
+            <div class="chat-head">Chat</div>
+            <div class="chat-log" id="game-chat-log"></div>
+            <form class="chat-form" id="game-chat-form">
+              <input class="chat-input" id="game-chat-input" maxlength="200" placeholder="Say something…" autocomplete="off" />
+              <button class="btn" type="submit">Send</button>
+            </form>
+          </div>
+        </aside>
       </div>
       <div class="tray-hint" id="tray-hint">drag a wall onto the board · press Space to rotate</div>
     </section>
@@ -230,6 +261,10 @@
             <button class="btn" id="tp-add">Add player +</button>
           </div>
           <div class="tcard-note" id="tp-count">Add at least 2 players</div>
+          <div class="setup-block">
+            <div class="setup-label">Game settings</div>
+            <div class="settings-host" id="tour-settings"></div>
+          </div>
           <button class="btn primary big" id="tp-start" disabled>Start tournament</button>
         </div>
       </div>
@@ -319,10 +354,30 @@
       </div>
     </div>
 
+    <!-- Freeplay setup -->
+    <div id="local-setup" class="overlay">
+      <div class="overlay-card">
+        <h2>Freeplay</h2>
+        <p class="win-sub">Two players sharing one device.</p>
+        <div class="setup-block">
+          <div class="setup-label">Game settings</div>
+          <div class="settings-host" id="local-settings"></div>
+        </div>
+        <div class="overlay-actions">
+          <button class="btn primary" id="local-start">Start game</button>
+          <button class="btn ghost" id="local-close">Back</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Difficulty picker -->
     <div id="difficulty" class="overlay">
       <div class="overlay-card">
         <h2>Pick your bot</h2>
+        <div class="setup-block">
+          <div class="setup-label">Game settings</div>
+          <div class="settings-host" id="bot-settings"></div>
+        </div>
         <div class="diff-list">
           <button class="diff-btn" data-diff="easy">
             <span class="diff-main"><span class="diff-name">Easy</span><span class="diff-sub">Wanders at random</span></span>

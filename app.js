@@ -67,6 +67,7 @@
     $('#restart-btn').hidden = !freeplay;      // restart: freeplay only
     $('#forfeit-btn').hidden = !compete;       // resign: friend + tournaments
     $('#draw-btn').hidden = !compete;          // draw:   friend + tournaments
+    $('#match-actions').hidden = !(freeplay || compete);  // hide the rail entirely in bot games
   }
 
   function startMatch(mode, difficulty) {
@@ -80,12 +81,14 @@
       net: null,
       settings: st,
       clock: setupClock(st),
+      history: [],
     };
     M.state.turn = randomTurn();
     setControls();
     drag = null;
     closeOverlay('overlay');
     closeOverlay('difficulty');
+    closeOverlay('local-setup');
     showScreen('game');
     render();
     maybeBot();
@@ -103,6 +106,8 @@
       net: { role, myPlayer, connected: true },
       settings: st,
       clock: setupClock(st),
+      history: [],
+      chat: [],
     };
     M.state.turn = first === 1 ? 1 : 0;   // starter is decided by the host and shared
     setControls();
@@ -167,6 +172,7 @@
   function applyAction(action, fromRemote) {
     const s = M.state;
     const actor = s.turn;
+    if (M.history) M.history.push(histEntry(action, actor));
     if (action.type === 'wall') R.applyWall(s, action.orient, action.r, action.c);
     else R.applyMove(s, action.to);
     clockOnAction(actor, fromRemote, action);
@@ -486,6 +492,7 @@
       pair: [a, b],
       settings: T.settings,
       clock: setupClock(T.settings),
+      history: [],
     };
     M.state.turn = randomTurn();
     setControls();
@@ -540,21 +547,101 @@
     return s;
   }
 
+  // ---------- move notation + history ----------
+  // Absolute board coordinates, independent of the per-client board flip, so the move
+  // list reads identically for both players and every spectator (no "true red" POV bug).
+  // Files a–i are columns 0–8; ranks 1–9 are rows 8–0 (player 0 starts on rank 1, like e1).
+  // A pawn move is just its destination square (e8). Placing a wall — its own move kind we
+  // call a "Wall" — is the wall's junction square plus h/v orientation (e4h).
+  const FILES = 'abcdefghi';
+  const sqName = (r, c) => FILES[c] + (SIZE - r);
+  const wallName = (orient, r, c) => FILES[c] + (SIZE - 1 - r) + orient;
+  function histEntry(action, actor) {
+    return action.type === 'wall'
+      ? { n: wallName(action.orient, action.r, action.c), wall: true, orient: action.orient, p: actor }
+      : { n: sqName(action.to.r, action.to.c), wall: false, orient: null, p: actor };
+  }
+
   // ---------- game settings (clock / bonus / walls) ----------
+  // Settings live on every surface where you set up a game you host — bot, freeplay,
+  // the create side of a friend room, and both tournament setups — never the menu, so
+  // it's always clear which game they apply to. One in-memory object backs every input
+  // surface, so editing any of them keeps the rest in sync.
   const SET_KEY = 'detour_settings';
   const DEFAULTS = { time: 10, bonus: 5, walls: 10 };
+  const SETTING_FIELDS = [
+    { key: 'time', label: 'Clock (min)', min: 0, max: 120 },
+    { key: 'bonus', label: 'Bonus (sec)', min: 0, max: 60 },
+    { key: 'walls', label: 'Walls', min: 0, max: 20 },
+  ];
   const clampN = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
   function loadSettings() {
     let s; try { s = JSON.parse(localStorage.getItem(SET_KEY)); } catch { /* ignore */ }
-    return { ...DEFAULTS, ...(s || {}) };
+    const out = { ...DEFAULTS, ...(s || {}) };
+    SETTING_FIELDS.forEach(f => { out[f.key] = clampN(out[f.key], f.min, f.max, DEFAULTS[f.key]); });
+    return out;
   }
-  const saveSettings = s => { try { localStorage.setItem(SET_KEY, JSON.stringify(s)); } catch { /* ignore */ } };
-  // current values from the menu inputs, clamped
-  const mySettings = () => ({
-    time: clampN($('#set-time').value, 0, 120, DEFAULTS.time),
-    bonus: clampN($('#set-bonus').value, 0, 60, DEFAULTS.bonus),
-    walls: clampN($('#set-walls').value, 0, 20, DEFAULTS.walls),
-  });
+  const settings = loadSettings();
+  const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch { /* ignore */ } };
+  const mySettings = () => ({ ...settings });
+
+  // Build the three settings inputs into a host element; all mounts share `settings`.
+  const settingsMounts = [];
+  function mountSettings(host) {
+    if (!host) return;
+    host.classList.add('settings-row');
+    host.innerHTML = '';
+    SETTING_FIELDS.forEach(f => {
+      const wrap = document.createElement('div'); wrap.className = 'setting';
+      const span = document.createElement('span'); span.textContent = f.label;
+      const stepper = document.createElement('div'); stepper.className = 'stepper';
+      const inp = document.createElement('input');
+      inp.className = 'num-input'; inp.type = 'number';
+      inp.min = f.min; inp.max = f.max; inp.step = 1; inp.value = settings[f.key];
+      inp.dataset.setKey = f.key;
+      const commit = val => {
+        settings[f.key] = clampN(val, f.min, f.max, DEFAULTS[f.key]);
+        saveSettings();
+        refreshSettingsInputs();
+        onSettingsChanged();
+      };
+      const minus = document.createElement('button');
+      minus.type = 'button'; minus.className = 'step-btn'; minus.textContent = '−';
+      minus.setAttribute('aria-label', 'Decrease ' + f.label);
+      minus.addEventListener('click', () => commit(settings[f.key] - 1));
+      const plus = document.createElement('button');
+      plus.type = 'button'; plus.className = 'step-btn'; plus.textContent = '+';
+      plus.setAttribute('aria-label', 'Increase ' + f.label);
+      plus.addEventListener('click', () => commit(settings[f.key] + 1));
+      inp.addEventListener('change', () => commit(inp.value));
+      stepper.append(minus, inp, plus);
+      wrap.append(span, stepper);
+      host.appendChild(wrap);
+    });
+    settingsMounts.push(host);
+  }
+  function refreshSettingsInputs() {
+    settingsMounts.forEach(h => $$('input[data-set-key]', h).forEach(inp => { inp.value = settings[inp.dataset.setKey]; }));
+  }
+  // a host editing settings in an un-started lobby pushes them to the guests live
+  function onSettingsChanged() {
+    if (OT && OT.host && !OT.started && $('#otour-lobby').classList.contains('is-active')) broadcastLobby();
+  }
+  // read-only display of someone else's settings (a tournament guest sees the host's)
+  function renderSettingsView(container, st) {
+    if (!container) return;
+    container.classList.add('settings-row');
+    container.innerHTML = '';
+    [['Clock (min)', st ? (st.time ? st.time : 'Off') : '–'],
+     ['Bonus (sec)', st ? st.bonus : '–'],
+     ['Walls', st ? st.walls : '–']].forEach(([label, val]) => {
+      const wrap = document.createElement('div'); wrap.className = 'setting';
+      const span = document.createElement('span'); span.textContent = label;
+      const v = document.createElement('div'); v.className = 'set-value'; v.textContent = val;
+      wrap.append(span, v);
+      container.appendChild(wrap);
+    });
+  }
 
   // ---------- clock ----------
   let clockTimer = null;
@@ -677,7 +764,7 @@
   async function otourJoin() {
     const code = $('#ote-code').value.trim().toUpperCase();
     if (code.length < 4) { $('#ote-status').textContent = 'Enter the 4-character code.'; return; }
-    OT = { host: false, names: [], code, chat: [] };
+    OT = { host: false, names: [], code, chat: [], settings: null };
     $('#ote-create').disabled = true; $('#ote-join').disabled = true;
     $('#ote-status').textContent = 'Connecting…';
     try { await window.Net.joinHub(code, onClientEvent); }
@@ -692,6 +779,12 @@
     const host = OT && OT.host;
     $('#otl-code').textContent = (OT && OT.code) || '----';
     $('#otl-start').hidden = !host;
+    // settings are visible to everyone before the start: the host edits them, guests see them read-only
+    $('#otl-settings-wrap').hidden = false;
+    $('#otl-settings-label').textContent = host ? 'Game settings' : "Host's game settings";
+    $('#otour-settings').hidden = !host;
+    $('#otl-settings-view').hidden = host;
+    if (!host) renderSettingsView($('#otl-settings-view'), OT && OT.settings);
 
     const list = $('#otl-roster');
     list.innerHTML = '';
@@ -771,6 +864,7 @@
     else if (msg.t === 'draw-accept') hostDrawAccept(id);
     else if (msg.t === 'draw-decline') hostDrawDecline(id);
     else if (msg.t === 'chat') hostChat(id, msg.text);
+    else if (msg.t === 'gchat') hostGameChat(id, msg.gi, msg.text);
   }
   function hostChat(id, text) {
     const clean = String(text || '').slice(0, 200).trim();
@@ -779,7 +873,7 @@
     addChat(name, clean);
     window.Net.broadcast({ t: 'chat', name, text: clean });   // echo to everyone (incl. sender)
   }
-  function broadcastLobby() { window.Net.broadcast({ t: 'lobby', names: OT.roster.map(p => p.name) }); }
+  function broadcastLobby() { window.Net.broadcast({ t: 'lobby', names: OT.roster.map(p => p.name), settings: mySettings() }); }
   function nameById(id) {
     if (id === HOST_ID) return myName();
     const src = (OT && (OT.started ? OT.players : OT.roster)) || [];
@@ -882,7 +976,7 @@
     const st = R.createState(OT.settings.walls); st.turn = randomTurn();
     const g = {
       gi, a: m.a, b: m.b, aName: OT.players[m.a].name, bName: OT.players[m.b].name,
-      state: st, clock: setupClock(OT.settings), drawOffer: null, done: false,
+      state: st, clock: setupClock(OT.settings), drawOffer: null, done: false, history: [], chat: [],
     };
     OT.live.set(gi, g);
     OT.busy.add(m.a); OT.busy.add(m.b);
@@ -890,11 +984,11 @@
     const snap = serState(st);
     const clk = g.clock ? g.clock.rem : null;
     window.Net.broadcast({ t: 'gamestart', gi, a: g.aName, b: g.bName });
-    window.Net.broadcast({ t: 'state', gi, s: snap, clk });
+    window.Net.broadcast({ t: 'state', gi, s: snap, clk, h: g.history });
     [[m.a, 0], [m.b, 1]].forEach(([pi, seat]) => {
       const id = OT.players[pi].id;
       if (id === HOST_ID) { OT.myGame = gi; OT.mySeat = seat; OT.viewCoolUntil = 0; viewGame(gi); }
-      else window.Net.sendTo(id, { t: 'youplay', gi, seat, a: g.aName, b: g.bName, s: snap, clk });
+      else window.Net.sendTo(id, { t: 'youplay', gi, seat, a: g.aName, b: g.bName, s: snap, clk, h: g.history });
     });
   }
   // re-show the ranking once the local player's cooldown elapses (spectate buttons reappear)
@@ -945,8 +1039,10 @@
     const actor = s.turn;
     if (action.type === 'wall') { if (!R.canPlaceWall(s, s.turn, action.orient, action.r, action.c)) return; R.applyWall(s, action.orient, action.r, action.c); }
     else { if (!R.legalMoves(s, s.turn).some(m => m.r === action.to.r && m.c === action.to.c)) return; R.applyMove(s, action.to); }
+    if (!g.history) g.history = [];
+    g.history.push(histEntry(action, actor));
     if (g.clock) { g.clock.rem[actor] += g.clock.bonus; g.clock.last = performance.now(); }
-    window.Net.broadcast({ t: 'state', gi: g.gi, s: serState(s), clk: g.clock ? g.clock.rem : null });
+    window.Net.broadcast({ t: 'state', gi: g.gi, s: serState(s), clk: g.clock ? g.clock.rem : null, h: g.history });
     if (M && M.mode === 'otour' && M.view === g.gi) { M.state = s; render(); }
     if (s.winner !== null) hostEndGame(g.gi, s.winner);
   }
@@ -997,7 +1093,7 @@
     OT.gameOf.delete(OT.players[a].id); OT.gameOf.delete(OT.players[b].id);
     OT.coolUntil.set(a, now + COOLDOWN); OT.coolUntil.set(b, now + COOLDOWN);
     const rows = sortRows(OT.players);
-    window.Net.broadcast({ t: 'state', gi, s: serState(g.state), clk: g.clock ? g.clock.rem : null });
+    window.Net.broadcast({ t: 'state', gi, s: serState(g.state), clk: g.clock ? g.clock.rem : null, h: g.history });
     window.Net.broadcast({ t: 'gameresult', gi, winner: draw ? null : g.winnerName, draw: !!draw, rows });
     if (M && M.mode === 'otour' && M.view === gi) {     // host was at this board → drop to ranking
       if (gi === OT.myGame) { OT.myGame = -1; OT.viewCoolUntil = now + COOLDOWN; scheduleCoolRefresh(); }
@@ -1044,7 +1140,7 @@
   }
   function clientOnData(msg) {
     if (!OT || OT.host) return;
-    if (msg.t === 'lobby') { OT.names = msg.names; if ($('#otour-lobby').classList.contains('is-active')) renderLobby(); }
+    if (msg.t === 'lobby') { OT.names = msg.names; if (msg.settings) OT.settings = msg.settings; if ($('#otour-lobby').classList.contains('is-active')) renderLobby(); }
     else if (msg.t === 'too-late') { toast('Tournament already started'); leaveOtour(); }
     else if (msg.t === 'kicked') { toast('Removed by the host'); leaveOtour(); }
     else if (msg.t === 'chat') { addChat(msg.name, msg.text); }
@@ -1059,7 +1155,7 @@
       OT.started = true;
       if (!OT.live) OT.live = new Map();
       ensureOtourM();
-      if (!OT.live.get(msg.gi)) OT.live.set(msg.gi, { gi: msg.gi, aName: msg.a, bName: msg.b, state: null, clock: null, done: false });
+      if (!OT.live.get(msg.gi)) OT.live.set(msg.gi, { gi: msg.gi, aName: msg.a, bName: msg.b, state: null, clock: null, done: false, history: [], chat: [] });
       if ($('#tournament-standings').classList.contains('is-active')) showClientStandings();
     }
     else if (msg.t === 'youplay') {       // self-contained, so a dropped gamestart/state can't strand you
@@ -1068,15 +1164,17 @@
       ensureOtourM();
       OT.myGame = msg.gi; OT.mySeat = msg.seat; OT.viewCoolUntil = 0;
       let g = OT.live.get(msg.gi);
-      if (!g) { g = { gi: msg.gi, aName: msg.a, bName: msg.b, state: null, clock: null, done: false }; OT.live.set(msg.gi, g); }
+      if (!g) { g = { gi: msg.gi, aName: msg.a, bName: msg.b, state: null, clock: null, done: false, history: [], chat: [] }; OT.live.set(msg.gi, g); }
       if (msg.s) g.state = deState(msg.s);
       if (msg.clk) g.clock = { rem: msg.clk.slice() };
+      if (msg.h) g.history = msg.h;
       viewGame(msg.gi);
     }
     else if (msg.t === 'state') {
       const g = OT.live && OT.live.get(msg.gi); if (!g) return;
       g.state = deState(msg.s);
       if (msg.clk) g.clock = { rem: msg.clk.slice() };
+      if (msg.h) g.history = msg.h;
       if (M && M.mode === 'otour' && M.view === msg.gi) {
         M.state = g.state;
         syncViewClock(msg.gi, msg.clk);
@@ -1104,6 +1202,15 @@
     else if (msg.t === 'done') {
       OT.lastRows = msg.rows || OT.lastRows; OT.done = true; OT.live = new Map();
       showClientStandings();
+    }
+    else if (msg.t === 'gchat') {
+      if (!OT.live) OT.live = new Map();
+      let g = OT.live.get(msg.gi);
+      if (!g) { g = { gi: msg.gi, aName: '', bName: '', state: null, clock: null, done: false, history: [], chat: [] }; OT.live.set(msg.gi, g); }
+      if (!g.chat) g.chat = [];
+      g.chat.push({ name: msg.name, text: msg.text });
+      if (g.chat.length > 80) g.chat.shift();
+      if (M && M.mode === 'otour' && M.view === msg.gi) renderGameChat();
     }
     else if (msg.t === 'draw-offer') { if (M && M.mode === 'otour' && OT.myGame >= 0) openDrawPrompt('otour'); }
     else if (msg.t === 'draw-declined') { toast('Draw declined'); }
@@ -1175,6 +1282,7 @@
       for (let c = 0; c < SIZE; c++) {
         const cell = document.createElement('div');
         cell.className = 'cell';
+        cell.dataset.r = r; cell.dataset.c = c;
         // row 0 is player 0's goal, row SIZE-1 is player 1's goal; colour by perspective
         if (r === 0) cell.classList.add('goal-top', me === 0 ? 'mine' : 'opp');
         if (r === SIZE - 1) cell.classList.add('goal-bottom', me === 1 ? 'mine' : 'opp');
@@ -1190,6 +1298,7 @@
     s.pawns.forEach((p, i) => {
       const pawn = document.createElement('div');
       pawn.className = 'pawn ' + (i === me ? 'mine' : 'opp');
+      if (i === s.turn && interactive()) { pawn.classList.add('draggable'); pawn.addEventListener('pointerdown', startPawnDrag); }
       cells[p.r][p.c].appendChild(pawn);
     });
 
@@ -1221,7 +1330,84 @@
 
     renderRails();
     renderClocks();
+    renderMoves();
+    renderCoords();
     updateStatus();
+    syncGameChat();
+  }
+
+  // file/rank labels around the board, oriented for the current viewer (matches the 180° flip)
+  function renderCoords() {
+    const ranks = $('#ranks'), files = $('#files');
+    if (!ranks || !files) return;
+    const me = meIndex();
+    ranks.innerHTML = ''; files.innerHTML = '';
+    for (let v = 0; v < SIZE; v++) {
+      const col = me === 1 ? SIZE - 1 - v : v;   // absolute column shown at visual position v
+      const row = me === 1 ? SIZE - 1 - v : v;   // absolute row shown at visual position v
+      const f = document.createElement('span'); f.textContent = FILES[col]; f.style.gridColumn = String(2 * v + 1); files.appendChild(f);
+      const rk = document.createElement('span'); rk.textContent = String(SIZE - row); rk.style.gridRow = String(2 * v + 1); ranks.appendChild(rk);
+    }
+  }
+
+  // ---------- in-game chat (online games: friend 1v1 + each tournament game) ----------
+  // Friend games keep the thread on the match (M.chat). Tournament games keep one thread
+  // per live game (g.chat), so a game's two players and anyone spectating it all share it.
+  function syncGameChat() {
+    const box = $('#game-chat');
+    if (!box) return;
+    const show = !!(M && (M.mode === 'net' || M.mode === 'otour'));
+    box.hidden = !show;
+    if (show) renderGameChat();
+  }
+  function currentChat() {
+    if (!M) return [];
+    if (M.mode === 'net') { if (!M.chat) M.chat = []; return M.chat; }
+    if (M.mode === 'otour') { const g = OT && OT.live && OT.live.get(M.view); if (!g) return []; if (!g.chat) g.chat = []; return g.chat; }
+    return [];
+  }
+  function renderGameChat() {
+    const log = $('#game-chat-log');
+    if (!log) return;
+    const me = myName();
+    log.innerHTML = '';
+    currentChat().forEach(m => {
+      const row = document.createElement('div');
+      row.className = 'chat-msg' + (m.name === me ? ' you' : '');
+      const nm = document.createElement('span'); nm.className = 'chat-name'; nm.textContent = m.name === me ? 'You' : m.name;
+      const tx = document.createElement('span'); tx.className = 'chat-text'; tx.textContent = m.text;
+      row.append(nm, tx);
+      log.appendChild(row);
+    });
+    log.scrollTop = log.scrollHeight;
+  }
+  function sendGameChat(text) {
+    const clean = String(text || '').trim().slice(0, 200);
+    if (!clean || !M) return;
+    if (M.mode === 'net') {
+      if (!M.chat) M.chat = [];
+      M.chat.push({ name: myName(), text: clean });
+      window.Net.send({ type: 'chat', name: myName(), text: clean });
+      renderGameChat();
+    } else if (M.mode === 'otour') {
+      const gi = M.view;
+      if (gi == null || gi < 0) return;
+      if (OT.host) hostGameChat(HOST_ID, gi, clean);
+      else window.Net.sendHost({ t: 'gchat', gi, text: clean });
+    }
+  }
+  // host relays a game's chat to everyone tagged with the game id; each client keeps it on that game
+  function hostGameChat(fromId, gi, text) {
+    const clean = String(text || '').slice(0, 200).trim();
+    if (!clean || !OT || !OT.host) return;
+    const g = OT.live && OT.live.get(gi);
+    if (!g) return;
+    const name = nameById(fromId);
+    if (!g.chat) g.chat = [];
+    g.chat.push({ name, text: clean });
+    if (g.chat.length > 80) g.chat.shift();
+    window.Net.broadcast({ t: 'gchat', gi, name, text: clean });
+    if (M && M.mode === 'otour' && M.view === gi) renderGameChat();
   }
 
   function addWall(k, orient) {
@@ -1244,7 +1430,10 @@
     const topDrag = interactive() && top === s.turn;  // local hotseat: the player to move drags from their own rail
     renderWalls($('#inventory'), bottom, bottomDrag);
     renderWalls($('#opp-inventory'), top, topDrag);
-    $('#orient-label').textContent = M.orient === 'h' ? 'Horizontal' : 'Vertical';
+    const orientLabel = M.orient === 'h' ? 'Horizontal' : 'Vertical';
+    $('#orient-label').textContent = orientLabel;
+    $('#orient-label-top').textContent = orientLabel;
+    $('#rotate-btn-top').hidden = !hotseat();   // p2 (top) gets their own wall-orientation button in hotseat
     $('#rail-top').classList.toggle('active', top === s.turn);
     $('#tray').classList.toggle('active', bottom === s.turn);
     $('#tray-hint').style.visibility = (bottomDrag || topDrag) && s.walls[s.turn] > 0 ? 'visible' : 'hidden';
@@ -1271,6 +1460,46 @@
     else if (hotseat()) statusEl.textContent = `${nameOf(s.turn)} to move`;
     else statusEl.textContent = s.turn === 0 ? 'Your turn' : 'Bot thinking…';
   }
+
+  // ---------- move list ----------
+  // History of the game currently on screen: the live otour game being viewed, else this match.
+  function currentHistory() {
+    if (!M) return [];
+    if (M.mode === 'otour') { const g = OT && OT.live && OT.live.get(M.view); return (g && g.history) || []; }
+    return M.history || [];
+  }
+  function renderMoves() {
+    const list = $('#moves-list');
+    if (!list) return;
+    const hist = currentHistory();
+    const me = meIndex();
+    list.innerHTML = '';
+    for (let i = 0; i < hist.length; i += 2) {
+      const row = document.createElement('div'); row.className = 'mv-row';
+      const no = document.createElement('span'); no.className = 'mv-no'; no.textContent = i / 2 + 1;
+      row.append(no, moveCell(hist[i], me), hist[i + 1] ? moveCell(hist[i + 1], me) : blankCell());
+      list.appendChild(row);
+    }
+    list.scrollTop = list.scrollHeight;
+  }
+  // one move token: a teal/amber marker (your colour vs the opponent's) + the square
+  function moveCell(entry, me) {
+    const cell = document.createElement('span');
+    cell.className = 'mv-cell ' + (entry.p === me ? 'mv-me' : 'mv-opp');
+    if (entry.wall) {
+      const ic = document.createElement('span'); ic.className = 'mv-wall' + (entry.orient === 'v' ? ' v' : '');
+      cell.appendChild(ic);
+      cell.title = 'Wall ' + entry.n;
+    } else {
+      const dot = document.createElement('span'); dot.className = 'mv-dot';
+      cell.appendChild(dot);
+      cell.title = 'Move ' + entry.n;
+    }
+    const tx = document.createElement('span'); tx.className = 'mv-text'; tx.textContent = entry.n;
+    cell.appendChild(tx);
+    return cell;
+  }
+  function blankCell() { const s = document.createElement('span'); s.className = 'mv-cell mv-empty'; return s; }
 
   // ---------- wall preview ----------
   function placePreview(orient, r, c, ok) {
@@ -1338,6 +1567,54 @@
     if (moved && target) submitAction({ type: 'wall', orient: M.orient, r: target.r, c: target.c });
   }
 
+  // ---------- drag a pawn to move (alongside click-to-move) ----------
+  function startPawnDrag(e) {
+    if (!interactive() || drag) return;
+    e.preventDefault();
+    e.stopPropagation();
+    drag = { kind: 'pawn', id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, ghost: null, cell: null, src: e.currentTarget };
+    document.addEventListener('pointermove', onPawnMove);
+    document.addEventListener('pointerup', endPawnDrag);
+    document.addEventListener('pointercancel', endPawnDrag);
+  }
+  function onPawnMove(e) {
+    if (!drag || drag.kind !== 'pawn' || e.pointerId !== drag.id) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 5) beginPawnGhost();
+    if (!drag.moved) return;
+    drag.ghost.style.left = e.clientX + 'px';
+    drag.ghost.style.top = e.clientY + 'px';
+    hitTestPawn(e.clientX, e.clientY);
+  }
+  function beginPawnGhost() {
+    drag.moved = true;
+    if (drag.src) drag.src.classList.add('lifted');
+    const size = boardEl.querySelector('.cell').getBoundingClientRect().width * 0.74;
+    const ghost = document.createElement('div');
+    ghost.className = 'pawn pawn-ghost ' + (M.state.turn === meIndex() ? 'mine' : 'opp');
+    ghost.style.width = ghost.style.height = size + 'px';
+    document.body.appendChild(ghost);
+    drag.ghost = ghost;
+  }
+  function hitTestPawn(x, y) {
+    const el = document.elementFromPoint(x, y);
+    const cell = el && el.closest && el.closest('.cell.movable');
+    if (drag.cell && drag.cell !== cell) drag.cell.classList.remove('drop');
+    if (cell) cell.classList.add('drop');
+    drag.cell = cell || null;
+  }
+  function endPawnDrag(e) {
+    if (!drag || drag.kind !== 'pawn' || (e && e.pointerId !== drag.id)) return;
+    document.removeEventListener('pointermove', onPawnMove);
+    document.removeEventListener('pointerup', endPawnDrag);
+    document.removeEventListener('pointercancel', endPawnDrag);
+    if (drag.ghost) drag.ghost.remove();
+    if (drag.src) drag.src.classList.remove('lifted');
+    const cell = drag.cell, moved = drag.moved;
+    if (cell) cell.classList.remove('drop');
+    drag = null;
+    if (moved && cell) submitAction({ type: 'move', to: { r: Number(cell.dataset.r), c: Number(cell.dataset.c) } });
+  }
+
   // ---------- online (friend room code) ----------
   function openOnline() {
     pendingRole = null;
@@ -1386,6 +1663,12 @@
     if (!M || M.mode !== 'net') return;
     const s = M.state;
     if (msg.type === 'name') { netPeerName = msg.name || null; render(); return; }
+    if (msg.type === 'chat') {
+      if (!M.chat) M.chat = [];
+      M.chat.push({ name: msg.name || netPeerName || 'Opponent', text: String(msg.text || '').slice(0, 200) });
+      renderGameChat();
+      return;
+    }
     if (msg.type === 'rematch') {
       netRematch.opp = true;
       if (netRematch.me) reachRematch();   // we already wanted it → both agree
@@ -1475,8 +1758,11 @@
     else if (m === 'friend') openOnline();
     else if (m === 'tournament') openTournamentSetup();
     else if (m === 'otour') openOtourEntry();
+    else if (m === 'local') openOverlay('local-setup');
     else startMatch(m);
   }));
+  $('#local-start').addEventListener('click', () => startMatch('local'));
+  $('#local-close').addEventListener('click', () => closeOverlay('local-setup'));
   $$('.diff-btn').forEach(b => b.addEventListener('click', () => startMatch('bot', b.dataset.diff)));
   $('#diff-close').addEventListener('click', () => closeOverlay('difficulty'));
   $('#how-btn').addEventListener('click', () => openOverlay('how'));
@@ -1499,7 +1785,9 @@
   $('#draw-decline').addEventListener('click', drawDecline);
   $('#rematch-accept').addEventListener('click', rematchAccept);
   $('#rematch-deny').addEventListener('click', rematchDeny);
-  $('#rotate-btn').addEventListener('click', () => setOrient(M.orient === 'h' ? 'v' : 'h'));
+  const toggleOrient = () => setOrient(M.orient === 'h' ? 'v' : 'h');
+  $('#rotate-btn').addEventListener('click', toggleOrient);
+  $('#rotate-btn-top').addEventListener('click', toggleOrient);
   // Space toggles wall orientation while it's your turn to place
   document.addEventListener('keydown', e => {
     if (e.code !== 'Space' && e.key !== ' ') return;
@@ -1537,16 +1825,20 @@
     input.value = '';
     sendChat(text);
   }));
+  $('#game-chat-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const input = $('#game-chat-input');
+    const text = input.value;
+    input.value = '';
+    sendGameChat(text);
+  });
 
   const nameInput = $('#player-name');
   nameInput.value = loadName();
   nameInput.addEventListener('input', () => { const v = nameInput.value.trim(); if (v) saveName(v); });
 
-  const st = loadSettings();
-  $('#set-time').value = st.time;
-  $('#set-bonus').value = st.bonus;
-  $('#set-walls').value = st.walls;
-  ['#set-time', '#set-bonus', '#set-walls'].forEach(id => $(id).addEventListener('change', () => saveSettings(mySettings())));
+  ['#bot-settings', '#local-settings', '#friend-settings', '#tour-settings', '#otour-settings']
+    .forEach(id => mountSettings($(id)));
 
   renderRecords();
 })();

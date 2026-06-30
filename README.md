@@ -23,13 +23,15 @@ The bot, freeplay, and local-tournament modes are fully offline. LAN play, LAN t
 
 ### Your name & game settings
 
-The menu has a **name** field (defaults to `Player-XXXX`, a random persisted suffix, so two people rarely collide — it's the name shown in online tournaments) and three game settings:
+The menu has a **name** field (defaults to `Player-XXXX`, a random persisted suffix, so two people rarely collide — it's the name shown in online tournaments).
+
+**Game settings live wherever you set up a game** — never in the menu — so it's always obvious which game they apply to. The same three controls appear on the bot picker, the Freeplay setup, the local-tournament card, the **create** side of a friend room, and the online-tournament lobby (host only):
 
 - **Clock** — minutes per player (default 10; `0` turns the clock off).
 - **Bonus** — seconds added to your clock after each move (default 5).
 - **Walls** — walls per player (default 10).
 
-These apply to whatever you start next. For online games the **host's** settings are used for everyone (sent on connect); for tournaments the settings are fixed when the bracket starts. Each player has a chess clock shown in their rail; running out of time loses the game (or the match, in a tournament).
+Your choices persist and stay in sync across every setup surface. When you **join a friend's room** you don't set them — the **host's** apply. When you **join an online tournament** the host's settings show **read-only in the lobby** (updating live if the host tweaks them) so you know the clock and wall count before the bracket starts and locks them in. Each player has a chess clock shown in their rail; running out of time loses the game (or the match, in a tournament).
 
 ### Online tournament (host-as-hub)
 
@@ -38,7 +40,7 @@ No game server: the **host's browser is the hub**. Other players connect to it o
 - **Games run continuously.** The **host only clicks Start once.** Every pairing is queued, and a match **launches the moment both its players are free** — so several games run at the same time (up to `floor(players / 2)` early on) and each one starts as soon as its two players have finished their previous game. Nobody waits on the host between matches.
 - **A 5-second cooldown between your matches.** When your game ends you're dropped back to the ranking for a short breather — the **Watch buttons hide** during it — then your next match starts automatically (or the Watch buttons return if you're waiting on an opponent).
 - **Not playing right now? You see the ranking page.** It lists every game in progress; tap **Watch** to spectate any of them and **Back** to return to the ranking. When your own match starts you're taken straight to your board (**Resume** from the ranking if you step away).
-- **Chat.** The lobby and ranking pages have a tournament chat; the host relays every message to everyone.
+- **Chat.** The lobby and ranking pages have a tournament-wide chat (the host relays every message to everyone), and **each game in progress has its own in-game chat** for that game's two players and its spectators.
 - **Kick.** The host can remove a player with the ✕ on their row — in the lobby, or mid-tournament (a kicked player is auto-forfeited from their remaining games, same as a disconnect).
 - **The host must stay connected** — if the host leaves, the tournament ends for everyone (no host migration).
 - A player who **resigns** concedes their current game but stays in; a player who **disconnects** is auto-forfeited from their remaining games so the bracket keeps moving.
@@ -62,7 +64,7 @@ Notes: the API key lives in client-side JS, so it's **public** — that's unavoi
 
 ## Online play
 
-"Play with a Friend" connects two browsers peer-to-peer over WebRTC. One player **creates a room** and shares the 4-character code; the other **joins** with it. Once you create a room the join field disappears (you're the host now, waiting on an opponent — same flow as hosting a tournament). There is no game server: both browsers run the same rules and exchange only the action taken each turn (deterministic lockstep), so they stay in sync. When a game ends, a **rematch needs both players** — pressing Rematch sends the other player a request to accept or decline; if both press Rematch, you go straight into the next game.
+"Play with a Friend" connects two browsers peer-to-peer over WebRTC. One player **creates a room** and shares the 4-character code; the other **joins** with it. Once you create a room the join field disappears (you're the host now, waiting on an opponent — same flow as hosting a tournament). There is no game server: both browsers run the same rules and exchange only the action taken each turn (deterministic lockstep), so they stay in sync. When a game ends, a **rematch needs both players** — pressing Rematch sends the other player a request to accept or decline; if both press Rematch, you go straight into the next game. A friend match also has an **in-game chat** in the side panel so the two of you can talk during the game.
 
 - Signaling uses the free public **PeerJS** broker, lazy-loaded from a CDN only when you open the online screen — the offline modes never touch the network.
 - Each player sees themselves as **blue at the bottom** and the opponent as **orange at the top**; the board is rotated 180° for the guest so both play "upward." **Who moves first is random** (the host rolls it and shares it, for the first game and every rematch), so hosting carries no advantage.
@@ -75,15 +77,23 @@ Cards are grouped into **Solo** (vs Bot, Freeplay), **Local network** (LAN Lobby
 
 ## Controls
 
-- **Move**: legal destinations highlight; click one to move.
-- **Walls**: your remaining walls sit in the tray under the board (the opponent's count is shown above it). Pick orientation with **Rotate** (or press **Space**), then **drag a wall onto a board junction**. A preview shows it in your colour if legal, red if not. Illegal placements (overlaps, crosses, or fully trapping a player) are rejected.
+- **Move**: legal destinations highlight; **click one, or drag your pawn onto it** (the pawn is a pick-up-able 3D piece).
+- **Walls**: your remaining walls sit in the tray under the board (the opponent's count is shown above it). Pick orientation with **Rotate** (or press **Space**), then **drag a wall onto a board junction**. A preview shows it in your colour if legal, red if not. Illegal placements (overlaps, crosses, or fully trapping a player) are rejected. In pass-and-play (Freeplay / local Tournament) the second player gets **their own Rotate button** on the top rail, so each side can set wall orientation from their own end.
 - Jump a face-to-face opponent in a straight line; if a wall is behind them, side-step around instead.
 
 Each player has 10 walls, drawn down from the tray as you place them.
 
-The game header's controls depend on the mode: **Restart** (↺) in freeplay only; **Resign** (⚑, red on hover) and **Draw** (½) in friend games and in local/online tournaments; bot games have neither (use **Back** to leave, then Rematch from the result card to replay). **Resign and Draw ask for confirmation first** so you can't trigger them by accident. Draw then asks the other player to agree — face-to-face for hotseat, or as an offer the opponent accepts/declines over the network (online tournaments route it through the host).
+The match controls (in the side rail next to the board, or below it on phones) depend on the mode: **Restart** (↺) in freeplay only; **Resign** (⚑, red on hover) and **Draw** (½) in friend games and in local/online tournaments; bot games have neither (use **Back** to leave, then Rematch from the result card to replay). **Resign and Draw ask for confirmation first** so you can't trigger them by accident. Draw then asks the other player to agree — face-to-face for hotseat, or as an offer the opponent accepts/declines over the network (online tournaments route it through the host).
 
 If a network game loses its connection — including the silent kind (a phone changing networks or going to sleep) — a **Connection lost** popup appears instead of leaving you stuck: peers exchange a heartbeat, so a connection that goes quiet for ~20s is treated as dropped.
+
+## On-screen layout & the move list
+
+On wide screens the board sits in the centre with the **player info down the left** (opponent on top, you on the bottom — name, walls left, and clock), the **Resign / Draw / Restart** controls just under your card, and a **scrolling move list down the right**, chess.com-style. On phones it all stacks instead: opponent, board, you, controls, then the move list. The drag-to-place wall tray always travels with your own info, so it stays to hand. **Rank numbers (1–9) and file letters (a–i) frame the board**, oriented for whichever side you're on.
+
+Every **online game has its own chat** below the move list — both in a **friend match** and in **each tournament game**. The two players and (in a tournament) anyone **spectating that game** share the same thread, so you can talk through the game as it happens. It's per-game: it shows the chat for whatever board you're currently watching, and it's separate from the tournament-wide chat on the lobby/ranking screens.
+
+Squares are named like chess — files **a–i** left to right, ranks **1–9** bottom to top (player 0 starts on rank 1, like `e1`). A **pawn move** is written as its destination square (`e8`). Placing a **wall** — its own kind of move, which we simply call a *Wall* — is written as the wall's junction square plus its orientation, `h` or `v` (`e4h`). The notation is **absolute**: it never depends on which side you're on, so both players and every spectator read the exact same list even though the guest's board is flipped 180°. In the list your moves carry a teal marker and the opponent's an amber one, and walls show a small bar (laid flat or upright) in the placer's colour.
 
 ## Look & feel
 
