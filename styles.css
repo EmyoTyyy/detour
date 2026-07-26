@@ -15,8 +15,10 @@
   --accent: #57cfc0;
   --accent-deep: #3fb3a5;
   --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
-  --me: #57cfc0;   /* you — teal */
-  --opp: #f0a64e;  /* opponent — amber */
+  --me: #57cfc0;   /* you — teal (also 4-player seat 0, Bottom) */
+  --opp: #f0a64e;  /* opponent — amber (also 4-player seat 1, Top) */
+  --p2: #9d7be6;   /* 4-player seat 2, Left — violet */
+  --p3: #63c473;   /* 4-player seat 3, Right — green */
   --me-soft: color-mix(in srgb, var(--me) 14%, transparent);
   --opp-soft: color-mix(in srgb, var(--opp) 14%, transparent);
   --danger: #ef6b4e;
@@ -67,6 +69,21 @@ body::after {
   opacity: .035;
   mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* build marker, tucked in the corner */
+.version {
+  position: fixed;
+  right: 10px;
+  bottom: 8px;
+  z-index: 30;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  opacity: .75;
 }
 
 /* atmospheric canvas — sits behind everything, lets the body gradient show through */
@@ -276,6 +293,77 @@ body::after {
 .num-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .num-input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
+/* segmented control (board-size modifier) */
+.segmented { display: flex; gap: 5px; }
+.seg-btn {
+  flex: 0 0 auto;
+  min-width: 36px;
+  padding: 8px 11px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background .16s var(--ease), box-shadow .16s var(--ease), color .16s var(--ease);
+}
+.seg-btn:hover { background: var(--surface-2); color: var(--text); }
+.seg-btn.on { background: var(--accent); color: #062520; box-shadow: none; }
+
+/* on/off modifier toggle */
+.toggle-btn {
+  min-width: 54px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .16s var(--ease), box-shadow .16s var(--ease), color .16s var(--ease);
+}
+.toggle-btn:hover { background: var(--surface-2); color: var(--text); }
+.toggle-btn.on { background: var(--accent); color: #062520; box-shadow: none; }
+
+/* settings host: base steppers row + a Modifiers dropdown */
+.settings-host { display: flex; flex-direction: column; align-items: center; gap: 11px; width: 100%; }
+.mods {
+  width: 100%;
+  max-width: 360px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  overflow: hidden;
+}
+.mods-summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  padding: 11px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mods-summary::-webkit-details-marker { display: none; }
+.mods-summary::after { content: "▾"; color: var(--faint); }
+.mods[open] .mods-summary::after { content: "▴"; }
+.mods-summary:hover { color: var(--text); background: var(--surface-2); }
+.mods-grid { padding: 14px; box-shadow: inset 0 1px 0 var(--line-soft); }
+
+/* pre-placed neutral walls (random-walls modifier) — owned by nobody */
+.wall.neutral { background: var(--muted); }
+
 /* ---------- Sub-screens (online + tournaments): a back button top-left, content centered ---------- */
 .sheet {
   position: relative;
@@ -351,7 +439,9 @@ body::after {
 .code-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }
 
 #room-display { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 2px; }
-#room-display[hidden] { display: none; }   /* the ID rule above otherwise overrode the hidden attribute, leaking a "----" code block onto the menu */
+#room-display[hidden] { display: none; }
+#friend-lobby { width: 100%; }
+#friend-lobby[hidden] { display: none; }   /* the ID rule above otherwise overrode the hidden attribute, leaking a "----" code block onto the menu */
 .room-label { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
 .room-code {
   font-size: 42px;
@@ -366,6 +456,18 @@ body::after {
 }
 .online-status { font-size: 13.5px; color: var(--muted); min-height: 20px; }
 .btn.big { padding: 15px 22px; font-size: 16px; width: 100%; }
+
+/* matchmaking spinner */
+.mm-spinner {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  animation: spin .9s linear infinite;
+  margin: 4px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------- Tournament ---------- */
 .panel-lead { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); text-wrap: pretty; }
@@ -606,6 +708,9 @@ body::after {
 }
 .mv-row { display: grid; grid-template-columns: 36px 1fr 1fr; align-items: stretch; }
 .mv-row:nth-child(even) { background: #ffffff05; }
+/* 4-player: one column per seat, so a row holds a full clockwise round */
+.moves-list.four .mv-row { grid-template-columns: 34px repeat(4, 1fr); }
+.moves-list.four .mv-cell { padding: 7px 8px; gap: 5px; font-size: 12.5px; }
 .mv-no {
   display: flex; align-items: center; justify-content: center;
   color: var(--faint); font-size: 12px; font-weight: 600;
@@ -624,8 +729,7 @@ body::after {
 .mv-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
 .mv-wall { width: 15px; height: 5px; border-radius: 2px; flex: 0 0 auto; }
 .mv-wall.v { width: 5px; height: 15px; }
-.mv-me .mv-dot, .mv-me .mv-wall { background: var(--me); }
-.mv-opp .mv-dot, .mv-opp .mv-wall { background: var(--opp); }
+.mv-cell .mv-dot, .mv-cell .mv-wall { background: var(--pc); }
 .mv-empty { color: transparent; }
 
 /* right side column: move list, plus the tournament chat while playing */
@@ -731,8 +835,29 @@ body::after {
 .wtoken.grab { cursor: grab; }
 .wtoken.grab:hover { transform: translateY(-2px); }
 .wtoken.vert { width: 9px; height: 26px; }
-.wtoken.mine { background: var(--me); }
-.wtoken.opp { background: var(--opp); }
+.wtoken { background: var(--pc); }
+
+/* 4-player scoreboard chips (shown in the top rail) */
+.rail-walls.p4-chips { gap: 6px 8px; }
+.p4-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.p4-chip .p4-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pc); flex: 0 0 auto; }
+.p4-chip.cur {
+  color: var(--text);
+  background: color-mix(in srgb, var(--pc) 16%, var(--surface-3));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 60%, var(--line));
+}
 
 .rotate-btn {
   flex: 0 0 auto;
@@ -764,8 +889,12 @@ body::after {
   box-shadow: var(--shadow-2), inset 0 0 0 1px var(--line-soft);
 }
 
-/* coordinate frame: rank numbers down the left, file letters across the bottom */
+/* coordinate frame: rank numbers down the left, file letters across the bottom.
+   --board-span (set in JS = N + (N-1)*0.22) makes the board fit its space at any size. */
 .board-frame {
+  --board-span: 10.76;
+  --cell: min(clamp(26px, 8.4vmin, 56px), calc(94vw / var(--board-span)));
+  --gap: calc(var(--cell) * 0.22);
   display: grid;
   grid-template-columns: auto auto;
   grid-template-rows: auto auto;
@@ -802,7 +931,6 @@ body::after {
   grid-template-rows: var(--cell) repeat(8, var(--gap) var(--cell));
   gap: 0;
 }
-.board.flip { transform: rotate(180deg); }
 
 .cell {
   background: var(--surface-3);
@@ -814,10 +942,12 @@ body::after {
   transition: background .12s var(--ease);
 }
 /* winning rows: solid tinted fill + a flat edge bar in the owner's colour */
-.cell.goal-top { box-shadow: inset 0 3px 0 var(--gc); }
-.cell.goal-bottom { box-shadow: inset 0 -3px 0 var(--gc); }
-.cell.mine { --gc: var(--me); background: color-mix(in srgb, var(--me) 13%, var(--surface-3)); }
-.cell.opp { --gc: var(--opp); background: color-mix(in srgb, var(--opp) 13%, var(--surface-3)); }
+.cell.goal-top { box-shadow: inset 0 3px 0 var(--pc); }
+.cell.goal-bottom { box-shadow: inset 0 -3px 0 var(--pc); }
+.cell.goal-left { box-shadow: inset 3px 0 0 var(--pc); }
+.cell.goal-right { box-shadow: inset -3px 0 0 var(--pc); }
+.cell.goal-top, .cell.goal-bottom, .cell.goal-left, .cell.goal-right { background: color-mix(in srgb, var(--pc) 13%, var(--surface-3)); }
+.cell.hole { background: none; box-shadow: none; pointer-events: none; }
 
 .cell.movable { cursor: pointer; }
 .cell.movable::after {
@@ -832,6 +962,12 @@ body::after {
 }
 .cell.movable:hover::after { transform: scale(1.25); }
 
+/* player colours: every coloured piece reads --pc, set by its seat/relationship class */
+.mine, .p0, .mv-me, .mv-p0 { --pc: var(--me); }
+.opp, .p1, .mv-opp, .mv-p1 { --pc: var(--opp); }
+.p2, .mv-p2 { --pc: var(--p2); }
+.p3, .mv-p3 { --pc: var(--p3); }
+
 /* pawns are the one deliberately 3D element — a shaded sphere you can pick up */
 .pawn {
   width: 70%;
@@ -839,10 +975,9 @@ body::after {
   border-radius: 50%;
   position: relative;
   z-index: 1;
+  background: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--pc) 12%, #ffffff) 0%, var(--pc) 52%, color-mix(in srgb, var(--pc) 62%, #000) 100%);
   box-shadow: 0 3px 6px -1px #04070b99, inset 0 2px 4px #ffffff5e, inset 0 -5px 8px #00000055;
 }
-.pawn.mine { background: radial-gradient(circle at 35% 28%, #d6f5ef 0%, var(--me) 52%, var(--accent-deep) 100%); }
-.pawn.opp { background: radial-gradient(circle at 35% 28%, #ffe4ba 0%, var(--opp) 52%, #c47f2c 100%); }
 .pawn.draggable { cursor: grab; touch-action: none; }
 .pawn.draggable:hover { transform: scale(1.05); }
 .pawn.lifted { opacity: .35; }
@@ -864,8 +999,7 @@ body::after {
   z-index: 2;
   border-radius: 3px;
 }
-.wall.mine { background: var(--me); }
-.wall.opp { background: var(--opp); }
+.wall { background: var(--pc); }
 
 /* wall drop junctions — live only during a drag */
 .wjunction {
@@ -892,8 +1026,7 @@ body::after {
 }
 
 .preview { z-index: 4; border-radius: 4px; pointer-events: none; opacity: .9; }
-.preview.ok.mine { background: var(--me); box-shadow: 0 0 14px var(--me-soft); }
-.preview.ok.opp { background: var(--opp); box-shadow: 0 0 14px var(--opp-soft); }
+.preview.ok { background: var(--pc); box-shadow: 0 0 14px color-mix(in srgb, var(--pc) 35%, transparent); }
 .preview.bad { background: var(--danger); opacity: .85; }
 
 .drag-ghost {
@@ -905,8 +1038,7 @@ body::after {
   pointer-events: none;
   z-index: 70;
 }
-.drag-ghost.mine { background: var(--me); }
-.drag-ghost.opp { background: var(--opp); }
+.drag-ghost { background: var(--pc); }
 
 /* ---------- Overlays ---------- */
 .overlay {
@@ -1022,7 +1154,7 @@ body::after {
      and a sane cap — so it never overflows. A 9-cell + 8-gap board spans cell*10.8.
      Set on the frame so the rank/file labels inherit the same cell/gap and stay aligned. */
   .board-frame {
-    --cell: min(calc((100dvh - 170px) / 10.8), calc((100vw - 530px) / 10.8), 120px);
+    --cell: min(calc((100dvh - 170px) / var(--board-span)), calc((100vw - 530px) / var(--board-span)), 120px);
     --gap: calc(var(--cell) * 0.22);
   }
   .play {

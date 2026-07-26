@@ -249,6 +249,99 @@
   }
   function sendHost(msg) { if (conn && conn.open) conn.send(msg); }
 
+  // ---------- random matchmaking (no backend) ----------
+  // The broker doubles as a rendezvous: a single well-known "lobby" id holds at most one
+  // waiting player. A new seeker that finds the lobby occupied connects to the waiter and the
+  // two are paired; if the lobby is empty the seeker claims it and becomes the waiter. On a
+  // match the waiter opens an ordinary private 1v1 room, hands its code to the joiner over the
+  // lobby channel, then releases the lobby id so the next pair can form right away. From there
+  // it is an ordinary friend game — same config / lockstep / chat / rematch path.
+  const MM_ID = 'detour-rmatch-lobby';
+  const MM_WAIT = 6000;     // wait this long for a waiter to answer before becoming the waiter
+  let mm = null;            // active matchmaking attempt: { cancelled, peer, matched }
+
+  function cancelMatch() {
+    if (mm) { mm.cancelled = true; try { mm.peer && mm.peer.destroy(); } catch { /* ignore */ } mm = null; }
+    close();
+  }
+
+  async function findMatch(onEvent) {
+    await ensureLib();
+    cb = onEvent;
+    const opts = await peerOpts();
+    const self = mm = { cancelled: false, peer: null, matched: false };
+    const dead = () => self.cancelled || mm !== self;
+
+    probe();   // first look for someone already waiting
+
+    // try to connect to the lobby; if nobody holds it, become the waiter
+    function probe() {
+      if (dead()) return;
+      const p = new Peer(undefined, opts);
+      self.peer = p;
+      let settled = false;
+      const step = fn => { if (settled || dead()) return; settled = true; fn(); };
+      p.on('open', () => {
+        if (dead()) { try { p.destroy(); } catch { /* ignore */ } return; }
+        const c = p.connect(MM_ID, { reliable: true });
+        c.on('data', d => {
+          if (!d) return;
+          if (d.__mm === 'go') step(() => { try { p.destroy(); } catch { /* ignore */ } guestJoin(d.code); });
+          else if (d.__mm === 'busy') step(() => { try { p.destroy(); } catch { /* ignore */ } setTimeout(probe, 500); });
+        });
+        c.on('error', () => { /* covered by the timeout below */ });
+        setTimeout(() => step(() => { try { p.destroy(); } catch { /* ignore */ } becomeWaiter(); }), MM_WAIT);
+      });
+      p.on('error', e => {
+        const t = e && e.type;
+        if (t === 'peer-unavailable') step(() => { try { p.destroy(); } catch { /* ignore */ } becomeWaiter(); });
+        else if (retryable(e)) step(() => { try { p.destroy(); } catch { /* ignore */ } setTimeout(probe, 800); });
+        else step(() => { cb && cb({ type: 'error', err: e }); });
+      });
+    }
+
+    // claim the lobby id and wait for a joiner
+    function becomeWaiter() {
+      if (dead()) return;
+      const lobby = new Peer(MM_ID, opts);
+      self.peer = lobby;
+      lobby.on('open', () => { if (!dead()) cb && cb({ type: 'searching' }); });
+      lobby.on('connection', c => {
+        c.on('open', () => {
+          if (dead()) return;
+          if (self.matched) { try { c.send({ __mm: 'busy' }); } catch { /* ignore */ } setTimeout(() => { try { c.close(); } catch { /* ignore */ } }, 200); return; }
+          self.matched = true;
+          pairAsHost(c, lobby);
+        });
+        c.on('error', () => { /* one bad joiner shouldn't end the wait */ });
+      });
+      lobby.on('error', e => {
+        if (dead()) return;
+        if (e && e.type === 'unavailable-id') { try { lobby.destroy(); } catch { /* ignore */ } setTimeout(probe, 300); }  // lost the race → go join them
+        else if (retryable(e)) { try { lobby.destroy(); } catch { /* ignore */ } setTimeout(probe, 800); }
+        else cb && cb({ type: 'error', err: e });
+      });
+    }
+
+    // waiter matched a joiner: open a private room, hand over its code, free the lobby
+    async function pairAsHost(lobbyConn, lobbyPeer) {
+      cb && cb({ type: 'role', role: 'host' });
+      mm = null;                                   // matchmaking done; the 1v1 host owns `peer` now
+      let code;
+      try { code = await host(cb); }
+      catch (e) { cb && cb({ type: 'error', err: e }); try { lobbyPeer.destroy(); } catch { /* ignore */ } return; }
+      try { lobbyConn.send({ __mm: 'go', code }); } catch { /* ignore */ }
+      setTimeout(() => { try { lobbyPeer.destroy(); } catch { /* ignore */ } }, 800);   // release the lobby for the next pair
+    }
+
+    // seeker matched: join the waiter's private room as guest
+    function guestJoin(code) {
+      cb && cb({ type: 'role', role: 'guest' });
+      mm = null;
+      join(code, cb);
+    }
+  }
+
   function close() {
     stopHeartbeat();
     conns.forEach(c => { try { c.close(); } catch { /* ignore */ } });
@@ -258,5 +351,5 @@
     conn = null; peer = null; cb = null;
   }
 
-  window.Net = { ensureLib, host, join, send, hostHub, joinHub, broadcast, sendTo, kick, sendHost, close };
+  window.Net = { ensureLib, host, join, send, hostHub, joinHub, broadcast, sendTo, kick, sendHost, findMatch, cancelMatch, close };
 })();

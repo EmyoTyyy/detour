@@ -1,7 +1,6 @@
 // app.js — UI + match controller for Detour.
 (function () {
   const R = window.Rules;
-  const SIZE = R.SIZE;
   const $ = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 
@@ -16,6 +15,7 @@
   let previewEl = null;    // ghost wall preview on the board grid
   let drag = null;         // active drag-from-inventory gesture, or { locked:true } while input is frozen
   let pendingRole = null;  // 'host' | 'guest' while a room is connecting
+  let mmSearching = false;  // true while looking for a random-match opponent
   let drawCtx = null;      // 'net' | 'local' | 'otour' — who the draw prompt is for
   let tourneyPlayers = []; // names being added on the local setup screen
   let netPeerName = null;  // opponent's display name in a friend game
@@ -72,18 +72,24 @@
 
   function startMatch(mode, difficulty) {
     const st = mySettings();
+    const p4 = st.fourP && (mode === 'bot' || mode === 'local');   // 4-player is local-only
+    const opts = modOpts(st);
+    if (p4) opts.players = 4;
+    const human = p4
+      ? (mode === 'bot' ? [true, false, false, false] : [true, true, true, true])
+      : (mode === 'local' ? [true, true] : [true, false]);
     M = {
-      state: R.createState(st.walls),
+      state: R.createState(opts),
       mode,
       difficulty: mode === 'bot' ? difficulty : null,
-      human: mode === 'local' ? [true, true] : [true, false],
+      human,
       orient: 'h',
       net: null,
       settings: st,
-      clock: setupClock(st),
+      clock: p4 ? null : setupClock(st),   // clocks aren't shown in 4-player yet
       history: [],
     };
-    M.state.turn = randomTurn();
+    M.state.turn = p4 ? 0 : randomTurn();   // 4-player opens with Bottom, then clockwise
     setControls();
     drag = null;
     closeOverlay('overlay');
@@ -95,10 +101,16 @@
     startClock();
   }
 
-  function startNetMatch(role, myPlayer, settings, first) {
+  function startNetMatch(role, myPlayer, settings, first, fixed) {
     const st = settings || (M && M.settings) || mySettings();
+    // the host rolls any Debris walls and ships them over; the guest replays them (opts.debris off)
+    // so both peers start from an identical board and stay in lockstep.
+    const opts = modOpts(st);
+    if (fixed) opts.debris = false;
+    const state = R.createState(opts);
+    if (fixed) R.setFixedWalls(state, fixed);
     M = {
-      state: R.createState(st.walls),
+      state,
       mode: 'net',
       difficulty: null,
       human: [false, false],
@@ -110,6 +122,7 @@
       chat: [],
     };
     M.state.turn = first === 1 ? 1 : 0;   // starter is decided by the host and shared
+    mmSearching = false;
     setControls();
     drag = null;
     netRematch = { me: false, opp: false };
@@ -126,6 +139,7 @@
   function resetOnlineScreen() {
     $('#online-choice').hidden = false;
     $('#room-display').hidden = true;
+    $('#friend-lobby').hidden = true;
     $('#online-status').textContent = '';
     $('#join-code').value = '';
     $('#create-room').disabled = false;
@@ -144,7 +158,23 @@
     return 0;
   };
 
+  // 4-player seats are named by the edge they start on
+  const SIDE_NAMES = ['Bottom', 'Top', 'Left', 'Right'];
+  const playerLabel = seat => SIDE_NAMES[seat] || ('P' + (seat + 1));
+  const wallColorClass = seat => (M.state.players === 4 ? 'p' + seat : (seat === meIndex() ? 'mine' : 'opp'));
+
+  // How far to spin the board so the viewer's own start edge sits at the bottom.
+  // 2-player: 180° for the second seat. 4-player online: per seat, by the edge you start on
+  // (0 Bottom, 1 Top -> 180, 2 Left -> 270, 3 Right -> 90). Local games are never rotated so
+  // hotseat play keeps a fixed shared board.
+  function boardRotation() {
+    const s = M.state;
+    if (s.players === 4) return M.mode === 'p4net' ? [0, 180, 270, 90][M.mySeat] : 0;
+    return meIndex() === 1 ? 180 : 0;
+  }
+
   function nameOf(idx) {
+    if (M.state && M.state.players === 4) return playerLabel(idx);
     if (M.names) return M.names[idx];
     if (M.net) return idx === M.net.myPlayer ? 'You' : (netPeerName || 'Opponent');
     if (M.mode === 'local') return `Player ${idx + 1}`;
@@ -154,16 +184,22 @@
   const interactive = () => {
     if (!M || M.state.winner !== null || drag?.locked) return false;
     if (M.mode === 'otour') return M.playing && OT && OT.mySeat === M.state.turn;
+    if (M.mode === 'p4net') return M.state.turn === M.mySeat;   // your seat, your turn
     if (M.net) return M.net.connected && M.net.myPlayer === M.state.turn;
     return M.human[M.state.turn];
   };
 
-  // All board input flows through here so online-tournament moves can be routed to the host.
+  // All board input flows through here so networked moves can be routed to the host.
   function submitAction(action) {
     if (M.mode === 'otour') {
       if (!M.playing) return;
       if (M.otour.host) hostApplyAction(action, HOST_ID);
       else window.Net.sendHost({ t: 'action', action });
+      return;
+    }
+    if (M.mode === 'p4net') {
+      if (P4 && P4.host) hostP4Action(action, HOST_ID);
+      else window.Net.sendHost({ t: 'p4act', action });
       return;
     }
     applyAction(action, false);
@@ -172,7 +208,7 @@
   function applyAction(action, fromRemote) {
     const s = M.state;
     const actor = s.turn;
-    if (M.history) M.history.push(histEntry(action, actor));
+    if (M.history) M.history.push(histEntry(s, action, actor));
     if (action.type === 'wall') R.applyWall(s, action.orient, action.r, action.c);
     else R.applyMove(s, action.to);
     clockOnAction(actor, fromRemote, action);
@@ -201,7 +237,7 @@
     statusEl.textContent = title;
     const tourney = M.mode === 'tournament' || M.mode === 'otour';
     $('#continue-btn').hidden = !tourney;
-    $('#rematch-btn').hidden = tourney;
+    $('#rematch-btn').hidden = tourney || M.mode === 'p4net';   // no rematch coordination for 4-player online
     $('#menu-btn').hidden = tourney;
     resetRematchButton();
     openOverlay('overlay');
@@ -222,6 +258,11 @@
     }
     if (w === 'draw') return showWin('Draw', 'A stalemate of detours.');
     recordResult(w === 0);
+    if (M.state.players === 4) {
+      if (M.mode === 'p4net') { const won = w === M.mySeat; return showWin(won ? 'You win' : `${playerLabel(w)} wins`, won ? 'First pawn to the far side.' : `${playerLabel(w)} got there first.`); }
+      if (M.mode === 'bot') return showWin(w === 0 ? 'You win' : `${playerLabel(w)} wins`, w === 0 ? 'First to the far side.' : 'A bot got there first.');
+      return showWin(`${playerLabel(w)} wins`, 'First pawn to the far side.');
+    }
     if (M.mode === 'local') showWin(`Player ${w + 1} wins`, 'Reached the other side first.');
     else if (w === 0) showWin('You win', `You beat the bot on ${M.difficulty}.`);
     else showWin('You lose', 'Detoured one turn too many.');
@@ -248,8 +289,8 @@
     closeOverlay('rematch-prompt');
     if (M.net.role === 'host') {
       const first = randomTurn();
-      window.Net.send({ type: 'rematch-go', first, settings: M.settings });
       startNetMatch('host', 0, M.settings, first);
+      window.Net.send({ type: 'rematch-go', first, settings: M.settings, fixed: M.state.fixedWalls });
     }
     // the guest waits for 'rematch-go'
   }
@@ -310,6 +351,7 @@
   }
 
   function leaveMatch() {
+    if (M && M.mode === 'p4net') return leaveP4();   // leaving ends the 4-player game (host drop = game over)
     if (M && M.mode === 'otour') {            // Back from any board returns to the ranking page
       if (M.view >= 0) { stopClock(); return showOtourStandings(); }
       return leaveOtour();                    // already on the ranking → leave the tournament
@@ -482,7 +524,7 @@
   function startTournamentMatch() {
     const [a, b] = T.schedule[T.current];
     M = {
-      state: R.createState(T.settings.walls),
+      state: R.createState(modOpts(T.settings)),
       mode: 'tournament',
       difficulty: null,
       human: [true, true],
@@ -533,10 +575,15 @@
 
   // ---------- state (de)serialisation for snapshots ----------
   function serState(s) {
-    return { t: s.turn, p: s.pawns.map(x => [x.r, x.c]), w: s.walls.slice(), h: [...s.hWalls], v: [...s.vWalls], by: s.wallBy, win: s.winner };
+    return { n: s.size, pl: s.players, in: s.inner, wl: s.wallLen, inv: s.inverted, fx: s.fixedWalls, t: s.turn, p: s.pawns.map(x => [x.r, x.c]), w: s.walls.slice(), h: [...s.hWalls], v: [...s.vWalls], by: s.wallBy, win: s.winner };
   }
   function deState(o) {
-    const s = R.createState();
+    const players = o.pl || 2;
+    const inner = players === 4 ? (o.in || (o.n - 2)) : (o.n || R.DEFAULT_SIZE);
+    const s = R.createState({ size: inner, players });
+    s.wallLen = o.wl || 2;
+    s.inverted = !!o.inv;
+    R.setFixedWalls(s, o.fx);
     s.turn = o.t;
     s.pawns = o.p.map(([r, c]) => ({ r, c }));
     s.walls = o.w.slice();
@@ -550,16 +597,17 @@
   // ---------- move notation + history ----------
   // Absolute board coordinates, independent of the per-client board flip, so the move
   // list reads identically for both players and every spectator (no "true red" POV bug).
-  // Files a–i are columns 0–8; ranks 1–9 are rows 8–0 (player 0 starts on rank 1, like e1).
+  // Files a… are columns 0…; ranks 1…N are rows N-1…0 (player 0 starts on rank 1, like e1).
+  // The rank/file count follows the board size, so it's correct on 7×7, 9×9 and 11×11.
   // A pawn move is just its destination square (e8). Placing a wall — its own move kind we
   // call a "Wall" — is the wall's junction square plus h/v orientation (e4h).
-  const FILES = 'abcdefghi';
-  const sqName = (r, c) => FILES[c] + (SIZE - r);
-  const wallName = (orient, r, c) => FILES[c] + (SIZE - 1 - r) + orient;
-  function histEntry(action, actor) {
+  const FILES = 'abcdefghijklmnopq';   // up to 17 files (4-player board can be (15+2)=17 wide)
+  const sqName = (n, r, c) => FILES[c] + (n - r);
+  const wallName = (n, orient, r, c) => FILES[c] + (n - 1 - r) + orient;
+  function histEntry(s, action, actor) {
     return action.type === 'wall'
-      ? { n: wallName(action.orient, action.r, action.c), wall: true, orient: action.orient, p: actor }
-      : { n: sqName(action.to.r, action.to.c), wall: false, orient: null, p: actor };
+      ? { n: wallName(s.size, action.orient, action.r, action.c), wall: true, orient: action.orient, p: actor }
+      : { n: sqName(s.size, action.to.r, action.to.c), wall: false, orient: null, p: actor };
   }
 
   // ---------- game settings (clock / bonus / walls) ----------
@@ -568,61 +616,126 @@
   // it's always clear which game they apply to. One in-memory object backs every input
   // surface, so editing any of them keeps the rest in sync.
   const SET_KEY = 'detour_settings';
-  const DEFAULTS = { time: 10, bonus: 5, walls: 10 };
-  const SETTING_FIELDS = [
+  const DEFAULTS = {
+    time: 10, bonus: 5, walls: 10,
+    size: 9, wallSize: 2, inverted: false, randomOrient: false, debris: false, fourP: false,
+  };
+  const clampN = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+  const fieldMax = f => (typeof f.max === 'function' ? f.max(settings) : f.max);
+
+  const BASE_FIELDS = [
     { key: 'time', label: 'Clock (min)', min: 0, max: 120 },
     { key: 'bonus', label: 'Bonus (sec)', min: 0, max: 60 },
     { key: 'walls', label: 'Walls', min: 0, max: 20 },
   ];
-  const clampN = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+  // the modifier menu — numbers and on/off toggles. `max` may depend on the current board size.
+  const MOD_FIELDS = [
+    { type: 'num', key: 'size', label: 'Board size', min: 5, max: 15 },
+    { type: 'num', key: 'wallSize', label: 'Wall length', min: 1, max: s => s.size - 1 },
+    { type: 'toggle', key: 'fourP', label: '4 players (local only)' },
+    { type: 'toggle', key: 'debris', label: 'Debris' },
+    { type: 'toggle', key: 'randomOrient', label: 'Random wall orientation' },
+    { type: 'toggle', key: 'inverted', label: 'Inverted (reach = lose)' },
+  ];
+  const ALL_FIELDS = BASE_FIELDS.concat(MOD_FIELDS);
+  const fieldByKey = k => ALL_FIELDS.find(f => f.key === k);
+  // modifiers that can't coexist (turning one on switches its rival off)
+  const MOD_CONFLICTS = { fourP: ['inverted'], inverted: ['fourP'] };
+
   function loadSettings() {
-    let s; try { s = JSON.parse(localStorage.getItem(SET_KEY)); } catch { /* ignore */ }
-    const out = { ...DEFAULTS, ...(s || {}) };
-    SETTING_FIELDS.forEach(f => { out[f.key] = clampN(out[f.key], f.min, f.max, DEFAULTS[f.key]); });
-    return out;
+    let raw; try { raw = JSON.parse(localStorage.getItem(SET_KEY)); } catch { /* ignore */ }
+    const out = { ...DEFAULTS, ...(raw || {}) };
+    if (raw && raw.longWalls && out.wallSize === DEFAULTS.wallSize) out.wallSize = 3;   // migrate the old "long walls" toggle
+    if (raw && raw.randomWalls) out.debris = true;                                       // migrate the old "random walls" toggle
+    ['longWalls', 'randomWalls', 'randomWallCount', 'randomWallSize'].forEach(k => delete out[k]);
+    return clampSettings(out);
+  }
+  // clamp everything into range, including the size-dependent fields (so shrinking the board pulls them in)
+  function clampSettings(o) {
+    BASE_FIELDS.forEach(f => { o[f.key] = clampN(o[f.key], f.min, f.max, DEFAULTS[f.key]); });
+    o.size = clampN(o.size, 5, 15, 9);
+    o.wallSize = clampN(o.wallSize, 1, o.size - 1, Math.min(DEFAULTS.wallSize, o.size - 1));
+    ['inverted', 'randomOrient', 'debris', 'fourP'].forEach(k => { o[k] = !!o[k]; });
+    if (o.fourP && o.inverted) o.inverted = false;   // mutually exclusive
+    return o;
   }
   const settings = loadSettings();
   const saveSettings = () => { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch { /* ignore */ } };
   const mySettings = () => ({ ...settings });
+  // map a settings bundle to the rules-engine options (size, wall length, and the modifier flags)
+  const modOpts = st => ({
+    size: st.size, walls: st.walls, wallLen: st.wallSize, inverted: !!st.inverted, debris: !!st.debris,
+  });
+  // commit a change: clamp, persist, repaint every surface, push to lobby guests
+  function commitSettings() { clampSettings(settings); saveSettings(); refreshSettingsInputs(); onSettingsChanged(); }
+  function setToggle(key) {
+    settings[key] = !settings[key];
+    if (settings[key]) (MOD_CONFLICTS[key] || []).forEach(other => { settings[other] = false; });
+    commitSettings();
+  }
 
-  // Build the three settings inputs into a host element; all mounts share `settings`.
+  // Each setup surface gets the base steppers inline + a "Modifiers" dropdown; all share `settings`.
   const settingsMounts = [];
+  function buildStepper(f) {
+    const wrap = document.createElement('div'); wrap.className = 'setting'; wrap.dataset.field = f.key;
+    const span = document.createElement('span'); span.textContent = f.label;
+    const stepper = document.createElement('div'); stepper.className = 'stepper';
+    const inp = document.createElement('input');
+    inp.className = 'num-input'; inp.type = 'number'; inp.min = f.min; inp.step = 1; inp.dataset.setKey = f.key;
+    const set = val => { settings[f.key] = clampN(val, f.min, fieldMax(f), settings[f.key]); commitSettings(); };
+    const minus = document.createElement('button'); minus.type = 'button'; minus.className = 'step-btn'; minus.textContent = '−';
+    minus.setAttribute('aria-label', 'Decrease ' + f.label);
+    minus.addEventListener('click', () => set(settings[f.key] - 1));
+    const plus = document.createElement('button'); plus.type = 'button'; plus.className = 'step-btn'; plus.textContent = '+';
+    plus.setAttribute('aria-label', 'Increase ' + f.label);
+    plus.addEventListener('click', () => set(settings[f.key] + 1));
+    inp.addEventListener('change', () => set(inp.value));
+    stepper.append(minus, inp, plus);
+    wrap.append(span, stepper);
+    return wrap;
+  }
+  function buildToggle(f) {
+    const wrap = document.createElement('div'); wrap.className = 'setting setting-wide'; wrap.dataset.field = f.key;
+    const span = document.createElement('span'); span.textContent = f.label;
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'toggle-btn'; btn.dataset.toggle = f.key;
+    btn.addEventListener('click', () => setToggle(f.key));
+    wrap.append(span, btn);
+    return wrap;
+  }
   function mountSettings(host) {
     if (!host) return;
-    host.classList.add('settings-row');
+    host.classList.add('settings-host');
     host.innerHTML = '';
-    SETTING_FIELDS.forEach(f => {
-      const wrap = document.createElement('div'); wrap.className = 'setting';
-      const span = document.createElement('span'); span.textContent = f.label;
-      const stepper = document.createElement('div'); stepper.className = 'stepper';
-      const inp = document.createElement('input');
-      inp.className = 'num-input'; inp.type = 'number';
-      inp.min = f.min; inp.max = f.max; inp.step = 1; inp.value = settings[f.key];
-      inp.dataset.setKey = f.key;
-      const commit = val => {
-        settings[f.key] = clampN(val, f.min, f.max, DEFAULTS[f.key]);
-        saveSettings();
-        refreshSettingsInputs();
-        onSettingsChanged();
-      };
-      const minus = document.createElement('button');
-      minus.type = 'button'; minus.className = 'step-btn'; minus.textContent = '−';
-      minus.setAttribute('aria-label', 'Decrease ' + f.label);
-      minus.addEventListener('click', () => commit(settings[f.key] - 1));
-      const plus = document.createElement('button');
-      plus.type = 'button'; plus.className = 'step-btn'; plus.textContent = '+';
-      plus.setAttribute('aria-label', 'Increase ' + f.label);
-      plus.addEventListener('click', () => commit(settings[f.key] + 1));
-      inp.addEventListener('change', () => commit(inp.value));
-      stepper.append(minus, inp, plus);
-      wrap.append(span, stepper);
-      host.appendChild(wrap);
-    });
+    const base = document.createElement('div'); base.className = 'settings-row';
+    BASE_FIELDS.forEach(f => base.appendChild(buildStepper(f)));
+    host.appendChild(base);
+    const det = document.createElement('details'); det.className = 'mods';
+    const sum = document.createElement('summary'); sum.className = 'mods-summary'; det.appendChild(sum);
+    const grid = document.createElement('div'); grid.className = 'mods-grid settings-row';
+    MOD_FIELDS.forEach(f => grid.appendChild(f.type === 'toggle' ? buildToggle(f) : buildStepper(f)));
+    det.appendChild(grid);
+    host.appendChild(det);
     settingsMounts.push(host);
+    paintMount(host);
   }
-  function refreshSettingsInputs() {
-    settingsMounts.forEach(h => $$('input[data-set-key]', h).forEach(inp => { inp.value = settings[inp.dataset.setKey]; }));
+  function modSummary() {
+    const parts = [`${settings.size}×${settings.size}`, `wall ${settings.wallSize}`];
+    if (settings.fourP) parts.push('4-player');
+    if (settings.debris) parts.push('debris');
+    if (settings.randomOrient) parts.push('rnd orient');
+    if (settings.inverted) parts.push('inverted');
+    return 'Modifiers · ' + parts.join(' · ');
   }
+  function paintMount(host) {
+    $$('input[data-set-key]', host).forEach(inp => { const f = fieldByKey(inp.dataset.setKey); if (f) inp.max = fieldMax(f); inp.value = settings[inp.dataset.setKey]; });
+    $$('[data-toggle]', host).forEach(b => {
+      const on = !!settings[b.dataset.toggle];
+      b.classList.toggle('on', on); b.textContent = on ? 'On' : 'Off'; b.setAttribute('aria-pressed', String(on));
+    });
+    $$('[data-field]', host).forEach(w => { const f = fieldByKey(w.dataset.field); if (f && f.showIf) w.hidden = !f.showIf(settings); });
+    const sum = $('.mods-summary', host); if (sum) sum.textContent = modSummary();
+  }
+  function refreshSettingsInputs() { settingsMounts.forEach(paintMount); }
   // a host editing settings in an un-started lobby pushes them to the guests live
   function onSettingsChanged() {
     if (OT && OT.host && !OT.started && $('#otour-lobby').classList.contains('is-active')) broadcastLobby();
@@ -634,7 +747,12 @@
     container.innerHTML = '';
     [['Clock (min)', st ? (st.time ? st.time : 'Off') : '–'],
      ['Bonus (sec)', st ? st.bonus : '–'],
-     ['Walls', st ? st.walls : '–']].forEach(([label, val]) => {
+     ['Walls', st ? st.walls : '–'],
+     ['Board', st && st.size ? (st.size + '×' + st.size) : '–'],
+     ['Wall length', st ? st.wallSize : '–'],
+     ['Debris', st ? (st.debris ? 'On' : 'Off') : '–'],
+     ['Random orient', st ? (st.randomOrient ? 'On' : 'Off') : '–'],
+     ['Inverted', st ? (st.inverted ? 'On' : 'Off') : '–']].forEach(([label, val]) => {
       const wrap = document.createElement('div'); wrap.className = 'setting';
       const span = document.createElement('span'); span.textContent = label;
       const v = document.createElement('div'); v.className = 'set-value'; v.textContent = val;
@@ -973,7 +1091,7 @@
   function launchGame(m) {
     m.played = true;
     const gi = OT.nextGi++;
-    const st = R.createState(OT.settings.walls); st.turn = randomTurn();
+    const st = R.createState(modOpts(OT.settings)); st.turn = randomTurn();
     const g = {
       gi, a: m.a, b: m.b, aName: OT.players[m.a].name, bName: OT.players[m.b].name,
       state: st, clock: setupClock(OT.settings), drawOffer: null, done: false, history: [], chat: [],
@@ -1040,7 +1158,7 @@
     if (action.type === 'wall') { if (!R.canPlaceWall(s, s.turn, action.orient, action.r, action.c)) return; R.applyWall(s, action.orient, action.r, action.c); }
     else { if (!R.legalMoves(s, s.turn).some(m => m.r === action.to.r && m.c === action.to.c)) return; R.applyMove(s, action.to); }
     if (!g.history) g.history = [];
-    g.history.push(histEntry(action, actor));
+    g.history.push(histEntry(g.state, action, actor));
     if (g.clock) { g.clock.rem[actor] += g.clock.bonus; g.clock.last = performance.now(); }
     window.Net.broadcast({ t: 'state', gi: g.gi, s: serState(s), clk: g.clock ? g.clock.rem : null, h: g.history });
     if (M && M.mode === 'otour' && M.view === g.gi) { M.state = s; render(); }
@@ -1270,40 +1388,59 @@
     el.style.gridColumn = `${col} / span ${colSpan}`;
   }
 
+  // grid track template for an N-cell board: cell, gap, cell, … (2N-1 tracks)
+  function boardTracks(n) { return `var(--cell) repeat(${n - 1}, var(--gap) var(--cell))`; }
+
   function render() {
     const s = M.state;
-    const me = meIndex();
+    const N = s.size;
+    const p4 = s.players === 4;
+    const me = p4 ? s.turn : meIndex();   // "near"/active player
     boardEl.innerHTML = '';
     boardEl.classList.remove('placing');
-    boardEl.classList.toggle('flip', me === 1);
-    const cells = Array.from({ length: SIZE }, () => []);
+    const deg = boardRotation();   // spin so the viewer's own edge faces them
+    boardEl.style.transform = deg ? `rotate(${deg}deg)` : '';
+    // size the board (and its label strips) for the current board size
+    boardEl.style.gridTemplateColumns = boardEl.style.gridTemplateRows = boardTracks(N);
+    const frame = boardEl.closest('.board-frame');
+    if (frame) frame.style.setProperty('--board-span', N + (N - 1) * 0.22);
+    const cells = Array.from({ length: N }, () => []);
 
-    for (let r = 0; r < SIZE; r++) {
-      for (let c = 0; c < SIZE; c++) {
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
         const cell = document.createElement('div');
         cell.className = 'cell';
         cell.dataset.r = r; cell.dataset.c = c;
-        // row 0 is player 0's goal, row SIZE-1 is player 1's goal; colour by perspective
-        if (r === 0) cell.classList.add('goal-top', me === 0 ? 'mine' : 'opp');
-        if (r === SIZE - 1) cell.classList.add('goal-bottom', me === 1 ? 'mine' : 'opp');
+        if (R.isHole(s, r, c)) cell.classList.add('hole');   // cut corner in 4-player
+        else if (p4) {                                       // each goal edge tinted in that player's colour
+          if (r === 0) cell.classList.add('goal-top', 'p0');
+          if (r === N - 1) cell.classList.add('goal-bottom', 'p1');
+          if (c === N - 1) cell.classList.add('goal-right', 'p2');
+          if (c === 0) cell.classList.add('goal-left', 'p3');
+        } else {
+          // row 0 is player 0's goal, row N-1 is player 1's goal; colour by perspective
+          if (r === 0) cell.classList.add('goal-top', me === 0 ? 'mine' : 'opp');
+          if (r === N - 1) cell.classList.add('goal-bottom', me === 1 ? 'mine' : 'opp');
+        }
         gridPos(cell, 2 * r + 1, 2 * c + 1);
         cells[r][c] = cell;
         boardEl.appendChild(cell);
       }
     }
 
+    (s.fixedWalls || []).forEach(addFixedWallEl);   // neutral pre-placed walls (Debris modifier)
     s.hWalls.forEach(k => addWall(k, 'h'));
     s.vWalls.forEach(k => addWall(k, 'v'));
 
     s.pawns.forEach((p, i) => {
       const pawn = document.createElement('div');
-      pawn.className = 'pawn ' + (i === me ? 'mine' : 'opp');
+      pawn.className = 'pawn ' + (p4 ? 'p' + i : (i === me ? 'mine' : 'opp'));
       if (i === s.turn && interactive()) { pawn.classList.add('draggable'); pawn.addEventListener('pointerdown', startPawnDrag); }
       cells[p.r][p.c].appendChild(pawn);
     });
 
-    for (let r = 0; r < SIZE - 1; r++) {
-      for (let c = 0; c < SIZE - 1; c++) {
+    for (let r = 0; r < N - 1; r++) {
+      for (let c = 0; c < N - 1; c++) {
         const j = document.createElement('div');
         j.className = 'wjunction';
         j.dataset.r = r; j.dataset.c = c;
@@ -1336,18 +1473,35 @@
     syncGameChat();
   }
 
-  // file/rank labels around the board, oriented for the current viewer (matches the 180° flip)
+  // file/rank labels around the board, oriented for the current viewer. The strips stay fixed
+  // (numbers down the left, letters across the bottom) while only the board spins, so a 90°/270°
+  // rotation swaps which axis each strip reads. Text is never rotated, so it always stays upright.
   function renderCoords() {
     const ranks = $('#ranks'), files = $('#files');
-    if (!ranks || !files) return;
-    const me = meIndex();
+    if (!ranks || !files || !M || !M.state) return;
+    const N = M.state.size;
+    const deg = boardRotation();
     ranks.innerHTML = ''; files.innerHTML = '';
-    for (let v = 0; v < SIZE; v++) {
-      const col = me === 1 ? SIZE - 1 - v : v;   // absolute column shown at visual position v
-      const row = me === 1 ? SIZE - 1 - v : v;   // absolute row shown at visual position v
-      const f = document.createElement('span'); f.textContent = FILES[col]; f.style.gridColumn = String(2 * v + 1); files.appendChild(f);
-      const rk = document.createElement('span'); rk.textContent = String(SIZE - row); rk.style.gridRow = String(2 * v + 1); ranks.appendChild(rk);
+    files.style.gridTemplateColumns = boardTracks(N);   // align label tracks with the board
+    ranks.style.gridTemplateRows = boardTracks(N);
+    for (let v = 0; v < N; v++) {
+      const f = document.createElement('span'); f.textContent = coordLabel('files', deg, N, v); f.style.gridColumn = String(2 * v + 1); files.appendChild(f);
+      const rk = document.createElement('span'); rk.textContent = coordLabel('ranks', deg, N, v); rk.style.gridRow = String(2 * v + 1); ranks.appendChild(rk);
     }
+  }
+  // Label shown at visual index v of a strip, given the board's rotation. 'files' is the bottom
+  // strip (screen columns), 'ranks' the left strip (screen rows); at 90/270 they read the opposite axis.
+  function coordLabel(strip, deg, N, v) {
+    if (strip === 'files') {
+      if (deg === 90) return String(v + 1);
+      if (deg === 180) return FILES[N - 1 - v];
+      if (deg === 270) return String(N - v);
+      return FILES[v];
+    }
+    if (deg === 90) return FILES[v];
+    if (deg === 180) return String(v + 1);
+    if (deg === 270) return FILES[N - 1 - v];
+    return String(N - v);
   }
 
   // ---------- in-game chat (online games: friend 1v1 + each tournament game) ----------
@@ -1413,14 +1567,33 @@
   function addWall(k, orient) {
     const [r, c] = k.split(',').map(Number);
     const owner = M.state.wallBy[orient + k];
+    const span = 2 * (M.state.wallLen || 2) - 1;   // a length-L wall covers L cells + (L-1) gaps
     const w = document.createElement('div');
-    w.className = 'wall ' + (owner === meIndex() ? 'mine' : 'opp');
-    if (orient === 'h') gridPos(w, 2 * r + 2, 2 * c + 1, 1, 3);
-    else gridPos(w, 2 * r + 1, 2 * c + 2, 3, 1);
+    w.className = 'wall ' + wallColorClass(owner);
+    if (orient === 'h') gridPos(w, 2 * r + 2, 2 * c + 1, 1, span);
+    else gridPos(w, 2 * r + 1, 2 * c + 2, span, 1);
     boardEl.appendChild(w);
+  }
+  // pre-placed neutral wall (random-walls modifier); carries its own length
+  function addFixedWallEl(wall) {
+    const span = 2 * wall.len - 1;
+    const w = document.createElement('div');
+    w.className = 'wall neutral';
+    if (wall.orient === 'h') gridPos(w, 2 * wall.r + 2, 2 * wall.c + 1, 1, span);
+    else gridPos(w, 2 * wall.r + 1, 2 * wall.c + 2, span, 1);
+    boardEl.appendChild(w);
+  }
+  // is the random-orientation modifier active for the game on screen?
+  function matchRandomOrient() {
+    if (!M) return false;
+    if (M.mode === 'otour') return !!(OT && OT.settings && OT.settings.randomOrient);
+    return !!(M.settings && M.settings.randomOrient);
   }
 
   function renderRails() {
+    if (M.state.players === 4) return render4pRails();
+    $('#opp-inventory').classList.remove('p4-chips');
+    $('#far-count').hidden = false;
     const s = M.state, bottom = meIndex(), top = 1 - bottom;
     $('#near-name').textContent = nameOf(bottom);
     $('#far-name').textContent = nameOf(top);
@@ -1433,16 +1606,48 @@
     const orientLabel = M.orient === 'h' ? 'Horizontal' : 'Vertical';
     $('#orient-label').textContent = orientLabel;
     $('#orient-label-top').textContent = orientLabel;
-    $('#rotate-btn-top').hidden = !hotseat();   // p2 (top) gets their own wall-orientation button in hotseat
+    const ro = matchRandomOrient();
+    $('#rotate-btn').hidden = ro;                       // random orientation → no manual choice
+    $('#rotate-btn-top').hidden = ro || !hotseat();     // p2 (top) gets their own button in hotseat
     $('#rail-top').classList.toggle('active', top === s.turn);
     $('#tray').classList.toggle('active', bottom === s.turn);
     $('#tray-hint').style.visibility = (bottomDrag || topDrag) && s.walls[s.turn] > 0 ? 'visible' : 'hidden';
+  }
+  // 4-player: the top rail becomes a 4-player scoreboard; the bottom tray belongs to whoever's turn it is
+  function render4pRails() {
+    const s = M.state, cur = s.turn;
+    $('#far-name').textContent = 'Players';
+    $('#far-count').hidden = true;
+    $('#far-clock').hidden = true;
+    $('#near-clock').hidden = true;
+    $('#rotate-btn-top').hidden = true;
+    const box = $('#opp-inventory');
+    box.classList.add('p4-chips');
+    box.innerHTML = '';
+    for (const seat of s.order) {   // clockwise
+      const chip = document.createElement('span');
+      chip.className = 'p4-chip p' + seat + (seat === cur ? ' cur' : '');
+      const dot = document.createElement('span'); dot.className = 'p4-dot';
+      const nm = document.createElement('span'); nm.textContent = playerLabel(seat) + ' · ' + s.walls[seat];
+      chip.append(dot, nm);
+      box.appendChild(chip);
+    }
+    // online: the tray is YOUR seat (whatever the turn); hotseat: it's the current player
+    const traySeat = M.mode === 'p4net' ? M.mySeat : cur;
+    $('#near-name').textContent = playerLabel(traySeat) + (M.mode === 'p4net' ? ' · you' : '');
+    $('#near-count').textContent = s.walls[traySeat];
+    renderWalls($('#inventory'), traySeat, interactive());
+    $('#orient-label').textContent = M.orient === 'h' ? 'Horizontal' : 'Vertical';
+    $('#rotate-btn').hidden = matchRandomOrient();
+    $('#rail-top').classList.toggle('active', false);
+    $('#tray').classList.toggle('active', interactive());
+    $('#tray-hint').style.visibility = interactive() && s.walls[traySeat] > 0 ? 'visible' : 'hidden';
   }
 
   function renderWalls(container, owner, draggable) {
     const s = M.state;
     container.innerHTML = '';
-    const color = owner === meIndex() ? 'mine' : 'opp';
+    const color = wallColorClass(owner);
     for (let i = 0; i < s.walls[owner]; i++) {
       const tok = document.createElement('div');
       tok.className = 'wtoken ' + color + (draggable ? ' grab' : '') + (draggable && M.orient === 'v' ? ' vert' : '');
@@ -1459,6 +1664,7 @@
     else if (M.net) statusEl.textContent = M.net.myPlayer === s.turn ? 'Your turn' : "Opponent's turn";
     else if (hotseat()) statusEl.textContent = `${nameOf(s.turn)} to move`;
     else statusEl.textContent = s.turn === 0 ? 'Your turn' : 'Bot thinking…';
+    if (s.inverted) statusEl.textContent = 'Inverted · ' + statusEl.textContent;   // reaching your edge loses
   }
 
   // ---------- move list ----------
@@ -1473,11 +1679,14 @@
     if (!list) return;
     const hist = currentHistory();
     const me = meIndex();
+    const per = M.state.players === 4 ? 4 : 2;   // one column per player: a round is 4 plies in 4-player
+    list.classList.toggle('four', per === 4);
     list.innerHTML = '';
-    for (let i = 0; i < hist.length; i += 2) {
+    for (let i = 0; i < hist.length; i += per) {
       const row = document.createElement('div'); row.className = 'mv-row';
-      const no = document.createElement('span'); no.className = 'mv-no'; no.textContent = i / 2 + 1;
-      row.append(no, moveCell(hist[i], me), hist[i + 1] ? moveCell(hist[i + 1], me) : blankCell());
+      const no = document.createElement('span'); no.className = 'mv-no'; no.textContent = i / per + 1;
+      row.append(no);
+      for (let k = 0; k < per; k++) row.append(hist[i + k] ? moveCell(hist[i + k], me) : blankCell());
       list.appendChild(row);
     }
     list.scrollTop = list.scrollHeight;
@@ -1485,7 +1694,8 @@
   // one move token: a teal/amber marker (your colour vs the opponent's) + the square
   function moveCell(entry, me) {
     const cell = document.createElement('span');
-    cell.className = 'mv-cell ' + (entry.p === me ? 'mv-me' : 'mv-opp');
+    const cls = M.state.players === 4 ? 'mv-p' + entry.p : (entry.p === me ? 'mv-me' : 'mv-opp');
+    cell.className = 'mv-cell ' + cls;
     if (entry.wall) {
       const ic = document.createElement('span'); ic.className = 'mv-wall' + (entry.orient === 'v' ? ' v' : '');
       cell.appendChild(ic);
@@ -1503,9 +1713,10 @@
 
   // ---------- wall preview ----------
   function placePreview(orient, r, c, ok) {
-    if (orient === 'h') gridPos(previewEl, 2 * r + 2, 2 * c + 1, 1, 3);
-    else gridPos(previewEl, 2 * r + 1, 2 * c + 2, 3, 1);
-    const who = M.state.turn === meIndex() ? 'mine' : 'opp';
+    const span = 2 * (M.state.wallLen || 2) - 1;
+    if (orient === 'h') gridPos(previewEl, 2 * r + 2, 2 * c + 1, 1, span);
+    else gridPos(previewEl, 2 * r + 1, 2 * c + 2, span, 1);
+    const who = wallColorClass(M.state.turn);
     previewEl.className = 'preview ' + (ok ? 'ok ' + who : 'bad');
     previewEl.style.display = '';
   }
@@ -1515,6 +1726,8 @@
   function startDrag(e) {
     if (!interactive() || drag) return;
     e.preventDefault();
+    if (matchRandomOrient()) M.orient = Math.random() < 0.5 ? 'h' : 'v';   // you don't choose — it's rolled at pickup
+
     drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, ghost: null, target: null };
     document.addEventListener('pointermove', onDragMove);
     document.addEventListener('pointerup', endDrag);
@@ -1533,11 +1746,14 @@
     drag.moved = true;
     boardEl.classList.add('placing');
     const cell = boardEl.querySelector('.cell').getBoundingClientRect().width;
-    const span = cell * 2.22;
+    const L = M.state.wallLen || 2;
+    const span = cell * (L + (L - 1) * 0.22);   // L cells + (L-1) gaps
     const ghost = document.createElement('div');
-    ghost.className = 'drag-ghost ' + (M.state.turn === meIndex() ? 'mine' : 'opp');
-    ghost.style.width = (M.orient === 'h' ? span : cell * 0.26) + 'px';
-    ghost.style.height = (M.orient === 'h' ? cell * 0.26 : span) + 'px';
+    ghost.className = 'drag-ghost ' + wallColorClass(M.state.turn);
+    const rot = boardRotation();                                   // the floaty ghost isn't inside the board,
+    const visH = rot === 90 || rot === 270 ? M.orient === 'v' : M.orient === 'h';   // so match the on-screen axis
+    ghost.style.width = (visH ? span : cell * 0.26) + 'px';
+    ghost.style.height = (visH ? cell * 0.26 : span) + 'px';
     document.body.appendChild(ghost);
     drag.ghost = ghost;
   }
@@ -1590,7 +1806,7 @@
     if (drag.src) drag.src.classList.add('lifted');
     const size = boardEl.querySelector('.cell').getBoundingClientRect().width * 0.74;
     const ghost = document.createElement('div');
-    ghost.className = 'pawn pawn-ghost ' + (M.state.turn === meIndex() ? 'mine' : 'opp');
+    ghost.className = 'pawn pawn-ghost ' + wallColorClass(M.state.turn);
     ghost.style.width = ghost.style.height = size + 'px';
     document.body.appendChild(ghost);
     drag.ghost = ghost;
@@ -1618,17 +1834,47 @@
   // ---------- online (friend room code) ----------
   function openOnline() {
     pendingRole = null;
+    P4 = null;
     resetOnlineScreen();
     showScreen('online');
+  }
+
+  // ---------- random match (matchmaking → ordinary friend game) ----------
+  function openRandom() {
+    mmSearching = true;
+    pendingRole = null;
+    netPeerName = null;
+    $('#random-status').textContent = 'Looking for an opponent…';
+    showScreen('random');
+    window.Net.findMatch(onNetEvent);
+  }
+  function cancelRandom() {
+    mmSearching = false;
+    try { window.Net.cancelMatch(); } catch { /* ignore */ }
+    netPeerName = null;
+    showScreen('menu');
+    renderRecords();
   }
   const setOnlineStatus = msg => { $('#online-status').textContent = msg; };
   const resetOnlineButtons = () => { $('#create-room').disabled = false; $('#join-room').disabled = false; };
 
   function onNetEvent(ev) {
     switch (ev.type) {
+      case 'role':                              // matchmaker decided who hosts the matched game
+        pendingRole = ev.role;
+        $('#random-status').textContent = 'Opponent found — connecting…';
+        break;
+      case 'searching':                         // we're the one waiting in the lobby now
+        $('#random-status').textContent = 'Waiting for an opponent to join…';
+        break;
       case 'open':
-        // the host fixes the settings and sends them (with its name); the guest waits for that config
-        if (pendingRole === 'host') { const st = mySettings(); const first = randomTurn(); window.Net.send({ type: 'config', settings: st, name: myName(), first }); startNetMatch('host', 0, st, first); }
+        // the host fixes the settings, builds its board (rolling any Debris walls), then sends the
+        // config + those walls; the guest waits for that config and replays the same board.
+        if (pendingRole === 'host') {
+          const st = mySettings(); const first = randomTurn();
+          startNetMatch('host', 0, st, first);
+          window.Net.send({ type: 'config', settings: st, name: myName(), first, fixed: M.state.fixedWalls });
+        }
         break;
       case 'data':
         handleNetData(ev.msg);
@@ -1649,15 +1895,16 @@
     else if (t === 'unavailable-id') msg = 'Room code clash — try again.';
     else if (t === 'timeout') msg = "Couldn't connect — your network is likely blocking it. Try another network or a phone hotspot.";
     else if (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') msg = 'Could not reach the server.';
-    if (M && M.mode === 'net') toast(msg);
-    else { resetOnlineButtons(); setOnlineStatus(msg); }
+    if (M && M.mode === 'net') { toast(msg); return; }
+    if (mmSearching) { $('#random-status').textContent = msg + ' Tap Back to try again.'; return; }
+    resetOnlineButtons(); setOnlineStatus(msg);
   }
 
   function handleNetData(msg) {
     if (msg.type === 'config') {
       netPeerName = msg.name || null;
       window.Net.send({ type: 'name', name: myName() });   // tell the host who we are
-      startNetMatch('guest', 1, msg.settings, msg.first);
+      startNetMatch('guest', 1, msg.settings, msg.first, msg.fixed);
       return;
     }
     if (!M || M.mode !== 'net') return;
@@ -1676,7 +1923,7 @@
       return;
     }
     if (msg.type === 'rematch-go') {        // host's signal to start the agreed rematch
-      startNetMatch('guest', 1, msg.settings || M.settings, msg.first);
+      startNetMatch('guest', 1, msg.settings || M.settings, msg.first, msg.fixed);
       return;
     }
     if (msg.type === 'rematch-decline') {
@@ -1705,6 +1952,7 @@
   }
 
   async function createRoom() {
+    if (settings.fourP) return friendCreate4p();
     pendingRole = 'host';
     $('#create-room').disabled = true; $('#join-room').disabled = true;
     setOnlineStatus('Creating room…');
@@ -1723,6 +1971,7 @@
   async function joinRoom() {
     const code = $('#join-code').value.trim().toUpperCase();
     if (code.length < 4) return setOnlineStatus('Enter the 4-character code.');
+    if (settings.fourP) return friendJoin4p(code);
     pendingRole = 'guest';
     $('#create-room').disabled = true; $('#join-room').disabled = true;
     setOnlineStatus('Connecting…');
@@ -1744,6 +1993,171 @@
     } catch { toast(text); }
   }
 
+  // ---------- 4-player online (host-authoritative hub; exactly 4 humans) ----------
+  // Reachable from "Play with a Friend" when the 4-player modifier is on. The host owns the board,
+  // validates each seat's move, and relays the whole state; everyone must have the modifier on.
+  let P4 = null;
+
+  async function friendCreate4p() {
+    P4 = { host: true, roster: [{ id: HOST_ID, name: myName() }], started: false, settings: mySettings() };
+    $('#create-room').disabled = true; $('#join-room').disabled = true;
+    setOnlineStatus('Creating 4-player room…');
+    try {
+      P4.code = await window.Net.hostHub(onP4Hub);
+      $('#online-choice').hidden = true;
+      $('#friend-lobby').hidden = false;
+      setOnlineStatus('');
+      renderP4Lobby();
+    } catch {
+      P4 = null; resetOnlineButtons();
+      setOnlineStatus('Could not reach the server. Check your connection.');
+    }
+  }
+  async function friendJoin4p(code) {
+    P4 = { host: false, code, names: [], started: false };
+    $('#create-room').disabled = true; $('#join-room').disabled = true;
+    setOnlineStatus('Joining 4-player room…');
+    try { await window.Net.joinHub(code, onP4Client); }
+    catch { P4 = null; resetOnlineButtons(); setOnlineStatus('Could not connect. Check the code.'); }
+  }
+  function leaveP4() {
+    try { window.Net.close(); } catch { /* ignore */ }
+    P4 = null; M = null;
+    closeOverlay('overlay');
+    showScreen('menu'); renderRecords();
+  }
+
+  function renderP4Lobby() {
+    if (!P4) return;
+    $('#friend-lobby').hidden = false;
+    $('#friend-code').textContent = P4.code || '----';
+    const names = P4.host ? P4.roster.map(p => p.name) : (P4.names || []);
+    const list = $('#friend-roster'); list.innerHTML = '';
+    names.forEach((n, i) => {
+      const onKick = (P4.host && i > 0) ? () => hostP4Kick(P4.roster[i].id) : null;
+      list.appendChild(tRow(i + 1, n, playerLabel(i), false, onKick));   // seat label shown in the score slot
+    });
+    const n = names.length;
+    $('#friend-start').hidden = !P4.host;
+    if (P4.host) {
+      $('#friend-start').disabled = n !== 4;
+      $('#friend-lobby-status').textContent = n < 4 ? `${n}/4 players — need ${4 - n} more…` : 'Four players ready.';
+    } else {
+      $('#friend-lobby-status').textContent = 'Waiting for the host to start…';
+    }
+  }
+  function hostP4Kick(id) {
+    if (!P4 || !P4.host || P4.started) return;
+    window.Net.sendTo(id, { t: 'kicked' });
+    P4.roster = P4.roster.filter(p => p.id !== id);
+    window.Net.kick(id);
+    broadcastP4Lobby(); renderP4Lobby();
+  }
+
+  // ---- host ----
+  function onP4Hub(ev) {
+    if (ev.type === 'data') hostP4Data(ev.id, ev.msg);
+    else if (ev.type === 'disconnect') hostP4Disconnect(ev.id);
+    else if (ev.type === 'error') toast('Network error');
+  }
+  function hostP4Data(id, msg) {
+    if (!P4 || !P4.host) return;
+    if (msg.t === 'hello') {
+      if (P4.started) { window.Net.sendTo(id, { t: 'too-late' }); return; }
+      if (P4.roster.length >= 4) { window.Net.sendTo(id, { t: 'full' }); return; }
+      if (!P4.roster.some(p => p.id === id)) P4.roster.push({ id, name: String(msg.name || 'Player').slice(0, 16) });
+      broadcastP4Lobby(); renderP4Lobby();
+    } else if (msg.t === 'p4act') hostP4Action(msg.action, id);
+  }
+  function broadcastP4Lobby() { window.Net.broadcast({ t: 'lobby', names: P4.roster.map(p => p.name) }); }
+  function hostP4Disconnect(id) {
+    if (!P4 || !P4.host) return;
+    if (!P4.started) { P4.roster = P4.roster.filter(p => p.id !== id); broadcastP4Lobby(); renderP4Lobby(); return; }
+    // mid-game: exactly four are required, so a drop ends it for everyone
+    const seat = P4.seatId.indexOf(id);
+    const name = seat >= 0 ? P4.seatName[seat] : 'A player';
+    window.Net.broadcast({ t: 'p4abort', name });
+    if (M && M.mode === 'p4net' && M.state && M.state.winner === null) showDisconnect(`${name} left — the game ended.`);
+    P4.started = false;
+  }
+  function hostP4Start() {
+    if (!P4 || !P4.host || P4.roster.length !== 4 || P4.started) return;
+    P4.started = true;
+    P4.seatId = P4.roster.map(p => p.id);
+    P4.seatName = P4.roster.map(p => p.name);
+    const opts = modOpts(P4.settings); opts.players = 4;
+    P4.state = R.createState(opts);
+    P4.state.turn = 0;
+    P4.history = [];
+    P4.seatId.forEach((pid, seat) => {
+      if (pid === HOST_ID) return;
+      window.Net.sendTo(pid, { t: 'p4start', seat, names: P4.seatName, s: serState(P4.state), settings: P4.settings });
+    });
+    startP4Match(0, null, P4.seatName, P4.settings);
+  }
+  function hostP4Action(action, fromId) {
+    if (!P4 || !P4.host || !P4.state || P4.state.winner !== null) return;
+    const s = P4.state, turn = s.turn;
+    if (fromId !== P4.seatId[turn]) return;   // only the seat whose turn it is
+    if (action.type === 'wall') { if (!R.canPlaceWall(s, turn, action.orient, action.r, action.c)) return; }
+    else { if (!R.legalMoves(s, turn).some(m => m.r === action.to.r && m.c === action.to.c)) return; }
+    P4.history.push(histEntry(s, action, turn));
+    if (action.type === 'wall') R.applyWall(s, action.orient, action.r, action.c); else R.applyMove(s, action.to);
+    window.Net.broadcast({ t: 'p4state', s: serState(s), h: P4.history });
+    if (M && M.mode === 'p4net') { M.state = s; M.history = P4.history; render(); }
+    if (s.winner !== null) endMatch();
+  }
+
+  // ---- client ----
+  function onP4Client(ev) {
+    if (ev.type === 'open') { window.Net.sendHost({ t: 'hello', name: myName() }); $('#online-choice').hidden = true; setOnlineStatus(''); renderP4Lobby(); }
+    else if (ev.type === 'data') clientP4Data(ev.msg);
+    else if (ev.type === 'close') showDisconnect('You were disconnected from the host.');
+    else if (ev.type === 'error') {
+      const t = ev.err && ev.err.type;
+      setOnlineStatus(t === 'peer-unavailable' ? 'No room with that code.' : 'Could not connect. Check the code.');
+      P4 = null; resetOnlineButtons(); $('#friend-lobby').hidden = true; $('#online-choice').hidden = false;
+    }
+  }
+  function clientP4Data(msg) {
+    if (!P4 || P4.host) return;
+    if (msg.t === 'lobby') { P4.names = msg.names; renderP4Lobby(); }
+    else if (msg.t === 'too-late') { toast('Game already started'); leaveP4(); }
+    else if (msg.t === 'full') { toast('Room is full'); leaveP4(); }
+    else if (msg.t === 'kicked') { toast('Removed by the host'); leaveP4(); }
+    else if (msg.t === 'p4start') { P4.started = true; P4.seatName = msg.names; startP4Match(msg.seat, msg.s, msg.names, msg.settings); }
+    else if (msg.t === 'p4state') {
+      if (!M || M.mode !== 'p4net') return;
+      M.state = deState(msg.s); if (msg.h) M.history = msg.h;
+      render();
+      if (M.state.winner !== null) endMatch();
+    }
+    else if (msg.t === 'p4abort') { showDisconnect(`${msg.name || 'A player'} left — the game ended.`); }
+  }
+
+  // set up the game screen for a 4-player online match (host: seat 0; guests: their assigned seat)
+  function startP4Match(seat, snap, names, st) {
+    M = {
+      mode: 'p4net',
+      state: P4.host ? P4.state : deState(snap),
+      mySeat: seat,
+      difficulty: null,
+      human: [],
+      orient: 'h',
+      net: null,
+      settings: st || (P4 && P4.settings) || mySettings(),
+      names: names || (P4 && P4.seatName) || [],
+      clock: null,
+      history: P4.host ? P4.history : [],
+    };
+    setControls();
+    drag = null;
+    resetOnlineScreen();
+    closeOverlay('overlay');
+    showScreen('game');
+    render();
+  }
+
   // ---------- wiring ----------
   function openDifficulty() { renderRecords(); openOverlay('difficulty'); }
 
@@ -1758,6 +2172,7 @@
     else if (m === 'friend') openOnline();
     else if (m === 'tournament') openTournamentSetup();
     else if (m === 'otour') openOtourEntry();
+    else if (m === 'random') openRandom();
     else if (m === 'local') openOverlay('local-setup');
     else startMatch(m);
   }));
@@ -1793,14 +2208,17 @@
     if (e.code !== 'Space' && e.key !== ' ') return;
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    if (drag || !$('#game').classList.contains('is-active') || !interactive()) return;
+    if (drag || !$('#game').classList.contains('is-active') || !interactive() || matchRandomOrient()) return;
     e.preventDefault();
     setOrient(M.orient === 'h' ? 'v' : 'h');
   });
 
-  $('#online-back').addEventListener('click', () => { window.Net.close(); showScreen('menu'); });
+  $('#random-back').addEventListener('click', cancelRandom);
+  $('#random-cancel').addEventListener('click', cancelRandom);
+  $('#online-back').addEventListener('click', () => { try { window.Net.close(); } catch { /* ignore */ } P4 = null; resetOnlineScreen(); showScreen('menu'); });
   $('#create-room').addEventListener('click', createRoom);
   $('#join-room').addEventListener('click', joinRoom);
+  $('#friend-start').addEventListener('click', hostP4Start);
   $('#copy-code').addEventListener('click', copyCode);
   $('#join-code').addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom(); });
 

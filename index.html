@@ -50,24 +50,6 @@
         </div>
 
         <div class="menu-group">
-          <h2 class="group-label">Local network</h2>
-          <button class="game-card disabled" disabled>
-            <span class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v3M11 11l-5 6M13 11l5 6"/></svg>
-            </span>
-            <span class="card-text"><span class="card-name">LAN Lobby</span><span class="card-sub">See players nearby</span></span>
-            <span class="soon">Soon</span>
-          </button>
-          <button class="game-card disabled" disabled>
-            <span class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4z"/><path d="M6 5H4v1a3 3 0 0 0 3 3M18 5h2v1a3 3 0 0 1-3 3"/><path d="M9.5 20h5M12 13v4"/></svg>
-            </span>
-            <span class="card-text"><span class="card-name">LAN Tournament</span><span class="card-sub">Same network, everyone plays</span></span>
-            <span class="soon">Soon</span>
-          </button>
-        </div>
-
-        <div class="menu-group">
           <h2 class="group-label">Online</h2>
           <button class="game-card" data-mode="friend">
             <span class="card-icon" aria-hidden="true">
@@ -81,19 +63,11 @@
             </span>
             <span class="card-text"><span class="card-name">Tournament</span><span class="card-sub">Host or join a room</span></span>
           </button>
-          <button class="game-card disabled" disabled>
+          <button class="game-card" data-mode="random">
             <span class="card-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/><circle cx="15" cy="15" r="1.2"/></svg>
             </span>
             <span class="card-text"><span class="card-name">Random Match</span><span class="card-sub">Find any opponent</span></span>
-            <span class="soon">Soon</span>
-          </button>
-          <button class="game-card disabled" disabled>
-            <span class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M9 12.5L7.5 21l4.5-2.6 4.5 2.6-1.5-8.5"/></svg>
-            </span>
-            <span class="card-text"><span class="card-name">Ranked</span><span class="card-sub">Climb the ladder</span></span>
-            <span class="soon">Soon</span>
           </button>
         </div>
       </div>
@@ -128,6 +102,32 @@
           <button class="btn ghost" id="copy-code">Copy code</button>
         </div>
         <div class="online-status" id="online-status"></div>
+      </div>
+      <div id="friend-lobby" hidden>
+        <div class="tcard">
+          <div class="tcard-head">4-player room</div>
+          <div class="tcard-list" id="friend-roster"></div>
+          <div class="tcard-foot">
+            <div class="tjoin"><span class="tjoin-label">Join</span><span class="tjoin-code" id="friend-code">----</span></div>
+            <div class="tcard-note" id="friend-lobby-status"></div>
+            <button class="btn primary big" id="friend-start" hidden disabled>Start game</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Random match (matchmaking) -->
+    <section id="random" class="screen sheet">
+      <button class="back-btn" id="random-back" aria-label="Back to menu">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>Back</span>
+      </button>
+      <div class="online-panel">
+        <h2 class="panel-title">Random match</h2>
+        <p class="panel-lead">You'll be paired with anyone else looking for a game right now — no code needed.</p>
+        <div class="mm-spinner" id="mm-spinner" aria-hidden="true"></div>
+        <div class="online-status" id="random-status">Looking for an opponent…</div>
+        <button class="btn" id="random-cancel">Cancel</button>
       </div>
     </section>
 
@@ -416,6 +416,7 @@
     </div>
 
     <div id="toast" class="toast"></div>
+    <div class="version">v2.2</div>
   </main>
 
   <script src="bg.js"></script>

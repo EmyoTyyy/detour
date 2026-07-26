@@ -28,8 +28,8 @@
     const myBefore = R.pathLength(state, me);
     const oppBefore = R.pathLength(state, opp);
     const out = [];
-    for (let r = 0; r < R.SIZE - 1; r++) {
-      for (let c = 0; c < R.SIZE - 1; c++) {
+    for (let r = 0; r < state.size - 1; r++) {
+      for (let c = 0; c < state.size - 1; c++) {
         for (const orient of ['h', 'v']) {
           if (!R.canPlaceWall(state, me, orient, r, c)) continue;
           const set = orient === 'h' ? state.hWalls : state.vWalls;
@@ -49,7 +49,6 @@
   // =====================================================================
   //  EXPERT ENGINE (hard)
   // =====================================================================
-  const SIZE = R.SIZE;
   const WIN = 1e6;          // terminal score magnitude
   const INF = 1e9;
   const BUDGET_MS = 700;    // per-move thinking budget
@@ -63,6 +62,13 @@
     const me = s.turn, opp = 1 - me;
     const dme = R.pathLength(s, me);
     const dopp = R.pathLength(s, opp);
+    if (s.inverted) {
+      // misère: reaching your goal loses, so you want to stay FAR from yours and push the
+      // opponent toward theirs. Being unable to reach your goal at all is safest of all.
+      if (dme === Infinity) return WIN;
+      if (dopp === Infinity) return -WIN;
+      return (dme - dopp) * 10 + (s.walls[me] - s.walls[opp]) * 3 + 1;
+    }
     if (dme === Infinity) return -WIN;
     if (dopp === Infinity) return WIN;
     // Path difference dominates; walls in hand are a real asset; tiny tempo nudge.
@@ -76,18 +82,20 @@
   }
 
   // Walls that block the orthogonal step a->b (the two anchors that cover that edge).
-  function pushEdgeWalls(a, b, seen, cand) {
+  function pushEdgeWalls(size, L, a, b, seen, cand) {
     const add = (orient, r, c) => {
-      if (r < 0 || r > SIZE - 2 || c < 0 || c > SIZE - 2) return;
+      if (r < 0 || c < 0) return;
+      if (orient === 'h' && (r > size - 2 || c > size - L)) return;
+      if (orient === 'v' && (r > size - L || c > size - 2)) return;
       const k = orient + r + ',' + c;
       if (!seen.has(k)) { seen.add(k); cand.push({ orient, r, c }); }
     };
     if (a.r === b.r) {                       // horizontal step -> a vertical wall blocks it
       const lc = Math.min(a.c, b.c);
-      add('v', a.r, lc); add('v', a.r - 1, lc);
+      for (let ar = a.r - L + 1; ar <= a.r; ar++) add('v', ar, lc);
     } else {                                 // vertical step -> a horizontal wall blocks it
       const tr = Math.min(a.r, b.r);
-      add('h', tr, a.c); add('h', tr, a.c - 1);
+      for (let ac = a.c - L + 1; ac <= a.c; ac++) add('h', tr, ac);
     }
   }
 
@@ -98,15 +106,15 @@
     let d = dmap.get(R.key(cur.r, cur.c));
     if (d === undefined) return;
     let guard = 0;
-    while (d > 0 && guard++ < 2 * SIZE * SIZE) {
+    while (d > 0 && guard++ < 2 * s.size * s.size) {
       let nxt = null;
       for (const [dr, dc] of R.DIRS) {
         const nr = cur.r + dr, nc = cur.c + dc;
-        if (!R.inBounds(nr, nc) || R.edgeBlocked(s, cur.r, cur.c, nr, nc)) continue;
+        if (!R.inBounds(s, nr, nc) || R.edgeBlocked(s, cur.r, cur.c, nr, nc)) continue;
         if (dmap.get(R.key(nr, nc)) === d - 1) { nxt = { r: nr, c: nc }; break; }
       }
       if (!nxt) break;
-      pushEdgeWalls(cur, nxt, seen, cand);
+      pushEdgeWalls(s.size, s.wallLen || 2, cur, nxt, seen, cand);
       cur = nxt; d--;
     }
   }
@@ -153,13 +161,14 @@
   function negamax(s, depth, alpha, beta, deadline) {
     if (depth === 0 || now() > deadline) return evaluateToMove(s);
     let best = -INF;
+    const mover = s.turn;
     const moves = generateMoves(s);
     for (const mv of moves) {
       const child = applyTo(R.cloneState(s), mv);
-      // applyMove leaves turn on the winner (no flip), so a winning move must be
-      // scored from THIS node's mover directly — never via -negamax (that flips the sign).
+      // applyMove leaves turn on whoever the move decided, so a terminal move is scored from THIS
+      // node's mover — a win if the mover won, a loss if it didn't (inverted makes reaching lose).
       const val = child.winner !== null
-        ? WIN + depth
+        ? (child.winner === mover ? WIN + depth : -(WIN + depth))
         : -negamax(child, depth - 1, -beta, -alpha, deadline);
       if (val > best) best = val;
       if (best > alpha) alpha = best;
@@ -174,13 +183,14 @@
     let moves = generateMoves(state);
     if (!moves.length) { const a = bestAdvance(state, state.turn); return a ? { type: 'move', to: a } : null; }
     let bestMove = moves[0];
+    const mover = state.turn;
 
     for (let depth = 1; depth <= MAX_DEPTH; depth++) {
       let alpha = -INF, localBest = -INF, localMove = null, aborted = false;
       for (const mv of moves) {
         const child = applyTo(R.cloneState(state), mv);
         const val = child.winner !== null
-          ? WIN + depth
+          ? (child.winner === mover ? WIN + depth : -(WIN + depth))
           : -negamax(child, depth - 1, -INF, -alpha, deadline);
         if (now() > deadline) { aborted = true; break; }
         if (val > localBest) { localBest = val; localMove = mv; }
@@ -221,8 +231,8 @@
     if (state.walls[me] > 0 && Math.random() < 0.18) {
       for (let t = 0; t < 8; t++) {
         const orient = Math.random() < 0.5 ? 'h' : 'v';
-        const r = Math.floor(Math.random() * (R.SIZE - 1));
-        const c = Math.floor(Math.random() * (R.SIZE - 1));
+        const r = Math.floor(Math.random() * (state.size - 1));
+        const c = Math.floor(Math.random() * (state.size - 1));
         if (R.canPlaceWall(state, me, orient, r, c)) return { type: 'wall', orient, r, c };
       }
     }
@@ -230,7 +240,29 @@
     return { type: 'move', to: moves[Math.floor(Math.random() * moves.length)] };
   }
 
+  // 4-player: the negamax search is zero-sum (2 players only), so free-for-alls use a fast
+  // heuristic — race on your own shortest path, and now and then wall whoever's closest to winning.
+  function choose4p(state, me, difficulty) {
+    if (difficulty === 'easy') return chooseRandom(state, me);
+    const advance = bestAdvance(state, me);
+    const wallChance = difficulty === 'hard' ? 0.4 : 0.22;
+    if (state.walls[me] > 0 && Math.random() < wallChance) {
+      let target = -1, best = Infinity;
+      for (let i = 0; i < state.pawns.length; i++) {
+        if (i === me) continue;
+        const d = R.pathLength(state, i);
+        if (d < best) { best = d; target = i; }
+      }
+      if (target >= 0) {
+        const walls = scoreWalls(state, me, target, 5);
+        if (walls.length) { const w = walls[0]; return { type: 'wall', orient: w.orient, r: w.r, c: w.c }; }
+      }
+    }
+    return advance ? { type: 'move', to: advance } : chooseRandom(state, me);
+  }
+
   function chooseAction(state, me, difficulty) {
+    if (state.pawns.length > 2) return choose4p(state, me, difficulty);
     if (difficulty === 'easy') return chooseRandom(state, me);
     if (difficulty === 'hard') return chooseExpert(state);
     return chooseMedium(state, me);

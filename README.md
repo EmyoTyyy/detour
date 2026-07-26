@@ -17,19 +17,29 @@ No build, no server, no dependencies. Open `index.html` in a browser (double-cli
 - **Freeplay** — two players, one device (hotseat).
 - **Tournament** (local) — round-robin: add named players, everyone plays everyone in pass-and-play, with a leaderboard between matches (win 3 pts, draw 1).
 - **Play with a Friend** — online 1v1 over a room code (needs internet).
+- **Random Match** — online 1v1 with no code: you're auto-paired with anyone else looking for a game right now (needs internet).
 - **Tournament** (online) — host a room, friends join by code; everyone plays everyone and whoever isn't in the current match watches it live (needs internet).
 
-The bot, freeplay, and local-tournament modes are fully offline. LAN play, LAN tournaments, random matchmaking, and ranked are placeholders (*Soon*).
+The bot, freeplay, and local-tournament modes are fully offline.
 
 ### Your name & game settings
 
 The menu has a **name** field (defaults to `Player-XXXX`, a random persisted suffix, so two people rarely collide — it's the name shown in online tournaments).
 
-**Game settings live wherever you set up a game** — never in the menu — so it's always obvious which game they apply to. The same three controls appear on the bot picker, the Freeplay setup, the local-tournament card, the **create** side of a friend room, and the online-tournament lobby (host only):
+**Game settings live wherever you set up a game** — never in the menu — so it's always obvious which game they apply to. The same controls appear on the bot picker, the Freeplay setup, the local-tournament card, the **create** side of a friend room, and the online-tournament lobby (host only):
 
 - **Clock** — minutes per player (default 10; `0` turns the clock off).
 - **Bonus** — seconds added to your clock after each move (default 5).
 - **Walls** — walls per player (default 10).
+
+…plus a **Modifiers** dropdown that changes the rules themselves (all combinable, and the bot adapts to every one). Incompatible modifiers switch each other off automatically:
+
+- **Board size** — any square board from **5×5** to **15×15** (default 9). The whole engine, the bot, the move notation, and the layout follow the chosen size.
+- **Wall length** — how many cells a placed wall spans, from **1** to **board − 1** (default 2). Shrinking the board pulls this back down to fit.
+- **Debris** — the board starts with **2–6 neutral (grey) length-2 walls** scattered at random, for a fresh puzzle every game; they never fully trap either player. In friend games the host rolls them and ships them to the guest so both sides start from an identical board.
+- **Random wall orientation** — you don't choose horizontal/vertical; each wall's orientation is rolled when you pick it up, and the Rotate button is hidden.
+- **Inverted** — misère mode: reaching your goal row makes you **lose**. To stop anyone stalling, when you move you must step **strictly closer** to your goal — though you may place a wall instead, which is how you lengthen your own forced route or shorten the gap on your opponent. The status bar shows **Inverted** and only your forced-forward squares light up. *(Not combinable with 4 players.)*
+- **4 players** — a free-for-all on a bigger board: the play area grows to **(N+2)×(N+2) with the four corner cells cut out** (an octagon), and four pawns — **Bottom / Left / Top / Right** — start at the middle of each outer edge and race to the opposite one. Turns go **clockwise**; first pawn home wins; a wall must leave *all four* players a route. Play it **local** (Freeplay with four people pass-and-play, or vs Bot as you against three bots) or **online**: with the modifier on, **Play with a Friend → Create a room** opens a 4-player room — exactly **four people** join by code (everyone needs the modifier on), the host starts, and the host's browser runs the authoritative board and relays it to the others. The clock is off in 4-player, and it's not combinable with Inverted.
 
 Your choices persist and stay in sync across every setup surface. When you **join a friend's room** you don't set them — the **host's** apply. When you **join an online tournament** the host's settings show **read-only in the lobby** (updating live if the host tweaks them) so you know the clock and wall count before the bracket starts and locks them in. Each player has a chess clock shown in their rail; running out of time loses the game (or the match, in a tournament).
 
@@ -71,9 +81,13 @@ Notes: the API key lives in client-side JS, so it's **public** — that's unavoi
 - Online games show a **Forfeit** flag (turns red on hover) instead of Restart — forfeiting hands the win to your opponent.
 - Connections use STUN plus a free public **TURN** relay (Open Relay) so peers behind strict/symmetric NATs can still connect; if a connection can't be made within ~20s you get a clear "couldn't connect" message instead of a silent hang. For heavy use, swap in your own TURN credentials in `net.js` (`PEER_OPTS`).
 
+### Random match (no code, no backend)
+
+**Random Match** pairs you with anyone else who's searching, without a room code. There's still no server: the matchmaking reuses the **PeerJS broker as a rendezvous**. One well-known "lobby" peer id holds at most one waiting player — so when you search, you either **connect to whoever's waiting** (and you're paired) or, if nobody is, you **become the waiter** yourself. On a match the waiter opens an ordinary private 1v1 room, hands its code to the joiner over the lobby channel, and immediately **releases the lobby** so the next pair can form. From that point it's a normal friend game (same lockstep, chat, and rematch), so a random opponent can rematch you too. Tap **Cancel** to stop searching. Because the lobby id is global to the deployed site, you're matched with anyone online anywhere — which also means with a tiny player base you may simply wait until a second person is searching.
+
 ## Menu
 
-Cards are grouped into **Solo** (vs Bot, Freeplay), **Local network** (LAN Lobby, Tournament — both *Soon*), and **Online** (Play with a Friend, plus Random Match and Ranked — *Soon*). The *Soon* cards are disabled placeholders for planned features.
+Cards are grouped into **Local** (vs Bot, Freeplay, Tournament) and **Online** (Play with a Friend, Random Match, online Tournament).
 
 ## Controls
 
