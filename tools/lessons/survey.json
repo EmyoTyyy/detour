@@ -1,0 +1,352 @@
+[
+ {
+  "line": "Standard Opening",
+  "prefix": "e2 e8 e3 e7 e4",
+  "turn": 1,
+  "best": "e6",
+  "kind": "move",
+  "gap": 12.974107395922797,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Shiller Opening",
+  "prefix": "e2 e8 e3 e7 e4",
+  "turn": 1,
+  "best": "e6",
+  "kind": "move",
+  "gap": 12.974107395922797,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Ala Opening",
+  "prefix": "e2 e8 e3 e7 e4",
+  "turn": 1,
+  "best": "e6",
+  "kind": "move",
+  "gap": 12.974107395922797,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Gap Opening",
+  "prefix": "e2 e8 e3 e7 e4",
+  "turn": 1,
+  "best": "e6",
+  "kind": "move",
+  "gap": 12.974107395922797,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Standard Opening",
+  "prefix": "e2 e8 e3",
+  "turn": 1,
+  "best": "e7",
+  "kind": "move",
+  "gap": 10.725964276975459,
+  "stable": true,
+  "depth": 12
+ },
+ {
+  "line": "Shiller Opening",
+  "prefix": "e2 e8 e3",
+  "turn": 1,
+  "best": "e7",
+  "kind": "move",
+  "gap": 10.725964276975459,
+  "stable": true,
+  "depth": 12
+ },
+ {
+  "line": "The Stonewall",
+  "prefix": "e2 e8 e3",
+  "turn": 1,
+  "best": "e7",
+  "kind": "move",
+  "gap": 10.725964276975459,
+  "stable": true,
+  "depth": 12
+ },
+ {
+  "line": "Ala Opening",
+  "prefix": "e2 e8 e3",
+  "turn": 1,
+  "best": "e7",
+  "kind": "move",
+  "gap": 10.725964276975459,
+  "stable": true,
+  "depth": 12
+ },
+ {
+  "line": "Gap Opening",
+  "prefix": "e2 e8 e3",
+  "turn": 1,
+  "best": "e7",
+  "kind": "move",
+  "gap": 10.725964276975459,
+  "stable": true,
+  "depth": 12
+ },
+ {
+  "line": "Standard Opening",
+  "prefix": "e2 e8 e3 e7 e4 e6 e3v",
+  "turn": 1,
+  "best": "d4h",
+  "kind": "wall",
+  "gap": 9.40807719446769,
+  "stable": true,
+  "depth": 10
+ },
+ {
+  "line": "Gap Opening",
+  "prefix": "e2 e8 e3 e7 e4 e6 e3v",
+  "turn": 1,
+  "best": "d4h",
+  "kind": "wall",
+  "gap": 9.40807719446769,
+  "stable": true,
+  "depth": 10
+ },
+ {
+  "line": "Gap Opening",
+  "prefix": "e2 e8 e3 e7 e4 e6 e3v e6v",
+  "turn": 0,
+  "best": "d5h",
+  "kind": "wall",
+  "gap": 2.269698563134759,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Ala Opening",
+  "prefix": "e2 e8 e3 e7 e4 e6 d5h",
+  "turn": 1,
+  "best": "f6",
+  "kind": "move",
+  "gap": 2.2618105627880913,
+  "stable": true,
+  "depth": 10
+ },
+ {
+  "line": "Reed Opening",
+  "prefix": "c3h a3h",
+  "turn": 0,
+  "best": "e8v",
+  "kind": "wall",
+  "gap": 1.7016879038340815,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Reed Opening",
+  "prefix": "c3h a3h f3h",
+  "turn": 1,
+  "best": "e8",
+  "kind": "move",
+  "gap": 1.6458540812487543,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Shiller Opening",
+  "prefix": "e2 e8 e3 e7 e4 e6 c3v",
+  "turn": 1,
+  "best": "e6h",
+  "kind": "wall",
+  "gap": 0.558582265254548,
+  "stable": true,
+  "depth": 10
+ },
+ {
+  "line": "Standard Opening",
+  "prefix": "e2 e8",
+  "turn": 0,
+  "best": "e3",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 12
+ },
+ {
+  "line": "Standard Opening",
+  "prefix": "e2 e8 e3 e7",
+  "turn": 0,
+  "best": "e4",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Standard Opening",
+  "prefix": "e2 e8 e3 e7 e4 e6",
+  "turn": 0,
+  "best": "d3h",
+  "kind": "wall",
+  "gap": 0,
+  "stable": true,
+  "depth": 10
+ },
+ {
+  "line": "Shiller Opening",
+  "prefix": "e2 e8",
+  "turn": 0,
+  "best": "e3",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 12
+ },
+ {
+  "line": "Shiller Opening",
+  "prefix": "e2 e8 e3 e7",
+  "turn": 0,
+  "best": "e4",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Shiller Opening",
+  "prefix": "e2 e8 e3 e7 e4 e6",
+  "turn": 0,
+  "best": "d3h",
+  "kind": "wall",
+  "gap": 0,
+  "stable": true,
+  "depth": 10
+ },
+ {
+  "line": "The Stonewall",
+  "prefix": "e2 e8",
+  "turn": 0,
+  "best": "e3",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 12
+ },
+ {
+  "line": "The Stonewall",
+  "prefix": "e2 e8 e3 e7",
+  "turn": 0,
+  "best": "e4",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "The Stonewall",
+  "prefix": "e2 e8 e3 e7 d2h",
+  "turn": 1,
+  "best": "e6",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Ala Opening",
+  "prefix": "e2 e8",
+  "turn": 0,
+  "best": "e3",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 12
+ },
+ {
+  "line": "Ala Opening",
+  "prefix": "e2 e8 e3 e7",
+  "turn": 0,
+  "best": "e4",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Ala Opening",
+  "prefix": "e2 e8 e3 e7 e4 e6",
+  "turn": 0,
+  "best": "d3h",
+  "kind": "wall",
+  "gap": 0,
+  "stable": true,
+  "depth": 10
+ },
+ {
+  "line": "Gap Opening",
+  "prefix": "e2 e8",
+  "turn": 0,
+  "best": "e3",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 12
+ },
+ {
+  "line": "Gap Opening",
+  "prefix": "e2 e8 e3 e7",
+  "turn": 0,
+  "best": "e4",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Gap Opening",
+  "prefix": "e2 e8 e3 e7 e4 e6",
+  "turn": 0,
+  "best": "d3h",
+  "kind": "wall",
+  "gap": 0,
+  "stable": true,
+  "depth": 10
+ },
+ {
+  "line": "Gap Opening",
+  "prefix": "e2 e8 e3 e7 e4 e6 e3v e6v g6h",
+  "turn": 1,
+  "best": "d6",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 10
+ },
+ {
+  "line": "The Sidewall",
+  "prefix": "e2 e8",
+  "turn": 0,
+  "best": "e3",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 12
+ },
+ {
+  "line": "The Sidewall",
+  "prefix": "e2 e8 d7v",
+  "turn": 1,
+  "best": "e7",
+  "kind": "move",
+  "gap": 0,
+  "stable": true,
+  "depth": 11
+ },
+ {
+  "line": "Reed Opening",
+  "prefix": "c3h a3h f3h h3h",
+  "turn": 0,
+  "best": "e8h",
+  "kind": "wall",
+  "gap": 0,
+  "stable": true,
+  "depth": 10
+ }
+]

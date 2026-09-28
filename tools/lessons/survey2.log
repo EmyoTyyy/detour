@@ -1,0 +1,29 @@
+Standard Opening fait, 30 positionsShiller Opening fait, 60 positionsThe Stonewall fait, 90 positionsAla Opening fait, 120 positionsGap Opening fait, 150 positionsThe Sidewall fait, 180 positionsShatranj Opening fait, 210 positionsReed Opening fait, 240 positions
+ecart  coup   type  trait  murs poses  venu de
+ 37.0% a3h    mur     0         9      Ala Opening
+ 17.6% e9     pion    0         6      Standard Opening
+ 16.7% d5h    mur     0         6      Gap Opening
+ 12.8% f6h    mur     1         5      Shiller Opening
+ 11.8% c3h    mur     1         6      The Stonewall
+ 11.7% d4h    mur     1         3      Shiller Opening
+ 11.3% d2     pion    0         5      The Sidewall
+ 11.2% f2     pion    0         5      Shatranj Opening
+ 11.2% f2     pion    0         6      Shatranj Opening
+ 11.1% d4h    mur     1         4      Shiller Opening
+ 11.1% d6h    mur     0         4      The Stonewall
+ 11.0% e5h    mur     1         7      Shiller Opening
+ 10.7% e5     pion    0         1      Shiller Opening
+ 10.7% e5     pion    0         1      Shiller Opening
+ 10.5% e6     pion    0         3      Shiller Opening
+ 10.1% e9     pion    1         2      Shatranj Opening
+  9.6% e5     pion    0         2      Standard Opening
+  9.4% d4h    mur     1         1      Standard Opening
+  9.4% d4h    mur     1         1      Standard Opening
+  9.4% d4h    mur     1         1      Standard Opening
+  9.4% d5h    mur     0        10      Gap Opening
+  9.4% e3     pion    0         3      The Sidewall
+  9.1% f2v    mur     1         8      The Stonewall
+  9.1% d5     pion    0         4      Shiller Opening
+  9.0% e5     pion    1         5      Standard Opening
+
+240 positions stables -> survey2.json

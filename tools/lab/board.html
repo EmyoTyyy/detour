@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Path — laboratoire</title>
+<style>
+  :root {
+    --bg: #12151b; --surface: #1a1f28; --line: #262d39;
+    --text: #e6e9ef; --muted: #98a2b3; --faint: #6b7688;
+    --ok: #3ddc84; --warn: #f0b429; --bad: #ef5a5f; --idle: #4e9fff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 48px;
+    background: var(--bg); color: var(--text);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 22px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -0.02em; }
+  h1 span { color: var(--ok); }
+  .when { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+  .card {
+    background: var(--surface);
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .top { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; background: var(--faint); }
+  .name { font-weight: 650; letter-spacing: -0.01em; }
+  .tag {
+    margin-left: auto; font-size: 11px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--faint);
+  }
+  .job { font-size: 13.5px; color: var(--muted); margin-bottom: 8px; }
+  .job b { color: var(--text); font-weight: 600; }
+  .prog {
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--text); word-break: break-word;
+  }
+  .note { margin-top: 6px; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+  .travaille .dot { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
+  .travaille .tag { color: var(--ok); }
+  .repos .dot { background: var(--idle); } .repos .tag { color: var(--idle); }
+  .bloque .dot { background: var(--warn); } .bloque .tag { color: var(--warn); }
+  .bloque .note { color: var(--warn); }
+  .injoignable .dot { background: var(--bad); } .injoignable .tag { color: var(--bad); }
+  .injoignable .prog { color: var(--faint); }
+  .arrete .dot { background: var(--faint); } .arrete .tag { color: var(--faint); }
+
+  .stop {
+    border: 0; cursor: pointer; font: inherit;
+    margin-left: 10px; padding: 4px 10px;
+    border-radius: 7px; font-size: 11px; font-weight: 700;
+    letter-spacing: .04em; text-transform: uppercase;
+    color: var(--muted); background: #222834;
+    box-shadow: inset 0 0 0 1px var(--line);
+    transition: background .15s, color .15s, box-shadow .15s;
+  }
+  .stop:hover { color: var(--text); }
+  .stop.armed { background: var(--bad); color: #fff; box-shadow: none; }
+  .stop:disabled { opacity: .4; cursor: default; }
+
+  /* the games in flight, one small board each */
+  .games { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; margin-top: 14px; }
+  .g { text-align: center; }
+  .g svg { width: 100%; height: auto; display: block; border-radius: 6px; background: #0e1116; }
+  .g .cap { margin-top: 4px; font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+  /* le duel: un seul plateau, en grand, parce qu'on le REGARDE au lieu de le surveiller */
+  .duel { margin-bottom: 18px; }
+  .duel .top { margin-bottom: 10px; }
+  .duel-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 20px; align-items: start; }
+  .duel svg { width: 100%; height: auto; display: block; border-radius: 10px; background: #0e1116; }
+  .duel-side { min-width: 0; }
+  .duel-line { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; margin-bottom: 7px; }
+  .duel-line .who { font-weight: 650; }
+  .duel-line .num { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .duel-line .p0 { color: #ff5c3b; } .duel-line .p1 { color: #4e9fff; }
+  .duel-moves {
+    margin-top: 12px; max-height: 300px; overflow: auto;
+    font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .duel-moves div { display: flex; gap: 8px; }
+  .duel-moves .mn { color: var(--faint); min-width: 2.2em; text-align: right; }
+  .duel-moves .mw { min-width: 4.2em; }
+  .duel-moves .mv { color: var(--text); min-width: 3.4em; }
+  .duel-moves .mt { color: var(--faint); }
+  .duel-moves .path { color: #ff5c3b; } .duel-moves .ishtar { color: #4e9fff; }
+  .duel-verdict { margin-top: 12px; font-size: 14px; font-weight: 650; }
+  @media (max-width: 720px) { .duel-wrap { grid-template-columns: 1fr; } }
+
+  footer { margin-top: 20px; font-size: 12px; color: var(--faint); line-height: 1.7; }
+  footer code { color: var(--muted); }
+  @media (prefers-reduced-motion: no-preference) {
+    .travaille .dot { animation: beat 2s ease-in-out infinite; }
+    @keyframes beat { 50% { opacity: .45; } }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Path <span>·</span> laboratoire</h1>
+    <div class="when" id="when">…</div>
+  </header>
+  <div id="rows"></div>
+  <footer>
+    Cette page lit les fichiers d'état ; la seule chose qu'elle écrit est le fichier <code>STOP</code>, et seulement si vous cliquez.<br>
+    <b>Arrêter</b> ne tue rien : il pose <code>STOP</code>, que chaque tâche vérifie et auquel elle répond en s'arrêtant proprement.<br>
+    Reprendre n'est volontairement pas un bouton — il faut de nouvelles graines, sinon les mêmes parties seraient rejouées et réécrites.
+  </footer>
+</div>
+<script>
+const LABEL = { travaille: 'en cours', repos: 'au repos', bloque: 'bloqué', injoignable: 'injoignable', arrete: 'arrêté', inconnu: '?' };
+
+// Two clicks, not one. This ends a night's work, and the page redraws several times a second --
+// a single button under a moving cursor is a misclick waiting to happen.
+const armed = new Map();
+function stopButton(machine) {
+  const b = document.createElement('button');
+  b.className = 'stop' + (armed.get(machine) ? ' armed' : '');
+  b.textContent = armed.get(machine) ? 'confirmer ?' : 'arrêter';
+  b.onclick = async (e) => {
+    e.stopPropagation();
+    if (!armed.get(machine)) {
+      armed.set(machine, true);
+      setTimeout(() => { armed.delete(machine); }, 5000);   // disarms itself
+      b.className = 'stop armed'; b.textContent = 'confirmer ?';
+      return;
+    }
+    armed.delete(machine);
+    b.disabled = true; b.textContent = 'envoi…';
+    try {
+      const res = await fetch('/api/stop', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ machine }),
+      });
+      const out = await res.json();
+      b.textContent = out.ok ? 'STOP posé' : 'échec';
+    } catch (err) { b.textContent = 'échec'; }
+  };
+  return b;
+}
+
+function card(r) {
+  const el = document.createElement('div');
+  el.className = 'card ' + r.state;
+  const top = document.createElement('div');
+  top.className = 'top';
+  const dot = document.createElement('span'); dot.className = 'dot';
+  const name = document.createElement('span'); name.className = 'name'; name.textContent = r.machine || '?';
+  const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = LABEL[r.state] || r.state;
+  top.append(dot, name, tag);
+  if (r.state === 'travaille' || r.state === 'bloque') top.append(stopButton(r.machine));
+
+  const job = document.createElement('div');
+  job.className = 'job';
+  if (r.state === 'injoignable') job.textContent = 'pas de réponse — machine éteinte, ou SSH coupé';
+  else if (!r.job) job.textContent = 'rien en cours';
+  else { job.innerHTML = ''; const b = document.createElement('b'); b.textContent = r.job; job.append(b, document.createTextNode(' · depuis ' + r.for)); }
+
+  const prog = document.createElement('div');
+  prog.className = 'prog';
+  prog.textContent = r.progress || '';
+
+  el.append(top, job, prog);
+  if (r.games && r.games.length) el.append(boards(r.games));
+  // A stalled heartbeat is the thing this page exists to show, so it is stated rather than
+  // left to be inferred from a timestamp.
+  if (r.state === 'bloque') {
+    const n = document.createElement('div');
+    n.className = 'note';
+    n.textContent = 'aucun signe de vie depuis ' + r.seen + ' — probablement arrêté';
+    el.append(n);
+  } else if (r.state === 'travaille') {
+    const n = document.createElement('div');
+    n.className = 'note';
+    n.textContent = 'dernier signal il y a ' + r.seen;
+    el.append(n);
+  }
+  return el;
+}
+
+// One 9x9 board per stream, drawn from the position the generator is actually on. Small on
+// purpose: the question these answer is "does this look like Quoridor being played", which a
+// thumbnail settles, and ten of them have to fit beside each other.
+const CELL = 10, GAP = 2, PAD = 3;
+const xy = i => PAD + i * (CELL + GAP);
+
+function boardSvg(g) {
+  const side = PAD * 2 + 9 * CELL + 8 * GAP;
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${side} ${side}`);
+  const rect = (x, y, w, h, fill, rx) => {
+    const e = document.createElementNS(ns, 'rect');
+    e.setAttribute('x', x); e.setAttribute('y', y);
+    e.setAttribute('width', w); e.setAttribute('height', h);
+    e.setAttribute('fill', fill); if (rx) e.setAttribute('rx', rx);
+    svg.appendChild(e); return e;
+  };
+  for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) rect(xy(c), xy(r), CELL, CELL, '#1e2530', 1.5);
+  const COL = ['#ff5c3b', '#4e9fff'];
+  // A wall spans two cells and the gap between them, sitting in the gap on its own axis. It is
+  // drawn in the colour of whoever placed it -- unowned ones (there should be none) stay amber.
+  const wc = (o) => COL[o] || '#f0b429';
+  for (const [r, c, o] of g.h || []) rect(xy(c), xy(r) + CELL, CELL * 2 + GAP, GAP, wc(o), 1);
+  for (const [r, c, o] of g.v || []) rect(xy(c) + CELL, xy(r), GAP, CELL * 2 + GAP, wc(o), 1);
+  (g.pawns || []).forEach(([r, c], i) => {
+    const e = document.createElementNS(ns, 'circle');
+    e.setAttribute('cx', xy(c) + CELL / 2); e.setAttribute('cy', xy(r) + CELL / 2);
+    e.setAttribute('r', CELL * 0.36); e.setAttribute('fill', COL[i]);
+    if (i === g.turn) { e.setAttribute('stroke', '#e6e9ef'); e.setAttribute('stroke-width', 1); }
+    svg.appendChild(e);
+  });
+  return svg;
+}
+
+function boards(games) {
+  const box = document.createElement('div');
+  box.className = 'games';
+  for (const g of games) {
+    const cell = document.createElement('div');
+    cell.className = 'g';
+    cell.appendChild(boardSvg(g));
+    const cap = document.createElement('div');
+    cap.className = 'cap';
+    cap.textContent = `#${g.seed} \u00b7 coup ${g.ply < 0 ? '\u2014' : g.ply} \u00b7 ${g.done} finies`;
+    cell.appendChild(cap);
+    box.appendChild(cell);
+  }
+  return box;
+}
+
+// Le meme dessin que les vignettes, mais en grand: memes couleurs, meme convention de mur, pour
+// qu'il n'y ait rien de nouveau a apprendre en passant de l'un a l'autre.
+function bigBoard(b) {
+  const C = 30, G = 7, P = 8;
+  const at = i => P + i * (C + G);
+  const side = P * 2 + 9 * C + 8 * G;
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${side} ${side}`);
+  const rect = (x, y, w, h, fill, rx) => {
+    const e = document.createElementNS(ns, 'rect');
+    e.setAttribute('x', x); e.setAttribute('y', y); e.setAttribute('width', w); e.setAttribute('height', h);
+    e.setAttribute('fill', fill); if (rx) e.setAttribute('rx', rx);
+    svg.appendChild(e);
+  };
+  for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) rect(at(c), at(r), C, C, '#1e2530', 4);
+  const COL = ['#ff5c3b', '#4e9fff'];
+  const wc = o => COL[o] || '#f0b429';
+  for (const [r, c, o] of b.h || []) rect(at(c), at(r) + C, C * 2 + G, G, wc(o), 3);
+  for (const [r, c, o] of b.v || []) rect(at(c) + C, at(r), G, C * 2 + G, wc(o), 3);
+  (b.pawns || []).forEach(([r, c], i) => {
+    const e = document.createElementNS(ns, 'circle');
+    e.setAttribute('cx', at(c) + C / 2); e.setAttribute('cy', at(r) + C / 2);
+    e.setAttribute('r', C * 0.34); e.setAttribute('fill', COL[i]);
+    if (i === b.turn) { e.setAttribute('stroke', '#e6e9ef'); e.setAttribute('stroke-width', 2.5); }
+    svg.appendChild(e);
+  });
+  return svg;
+}
+
+function duelCard(d) {
+  const el = document.createElement('div');
+  el.className = 'card duel ' + (d.winner != null ? 'repos' : 'travaille');
+  const top = document.createElement('div');
+  top.className = 'top';
+  const dot = document.createElement('span'); dot.className = 'dot';
+  const name = document.createElement('span'); name.className = 'name'; name.textContent = d.titre || 'Path contre Ishtar';
+  const tag = document.createElement('span'); tag.className = 'tag';
+  tag.textContent = d.erreur ? 'erreur' : d.winner != null ? 'terminee' : d.thinking ? (d.thinking + ' réfléchit') : 'coup ' + (d.ply || 0);
+  top.append(dot, name, tag);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'duel-wrap';
+  if (d.board) wrap.appendChild(bigBoard(d.board));
+
+  const side = document.createElement('div');
+  side.className = 'duel-side';
+  const who = ['Path', 'Ishtar'];
+  if (d.pathSeat === 1) who.reverse();
+  for (let i = 0; i < 2; i++) {
+    const line = document.createElement('div');
+    line.className = 'duel-line';
+    const w = document.createElement('span');
+    w.className = 'who p' + i; w.textContent = who[i];
+    const dist = document.createElement('span');
+    dist.textContent = d.dist && d.dist[i] != null ? d.dist[i] + ' pas' : '';
+    const n = document.createElement('span');
+    n.className = 'num'; n.textContent = (d.hands ? d.hands[i] : '?') + ' murs';
+    line.append(w, dist, n);
+    side.appendChild(line);
+  }
+  if (d.erreur) { const e = document.createElement('div'); e.className = 'duel-verdict'; e.textContent = d.erreur; side.appendChild(e); }
+  if (d.verdict) { const v = document.createElement('div'); v.className = 'duel-verdict'; v.textContent = d.verdict; side.appendChild(v); }
+
+  const list = document.createElement('div');
+  list.className = 'duel-moves';
+  for (const m of (d.moves || []).slice().reverse()) {
+    const row = document.createElement('div');
+    const a = document.createElement('span'); a.className = 'mn'; a.textContent = m.n;
+    const b = document.createElement('span'); b.className = 'mw ' + (m.who === 'Path' ? 'path' : 'ishtar'); b.textContent = m.who;
+    const c = document.createElement('span'); c.className = 'mv'; c.textContent = m.mv;
+    const e = document.createElement('span'); e.className = 'mt'; e.textContent = m.note || ((m.ms / 1000).toFixed(1) + 's');
+    row.append(a, b, c, e);
+    list.appendChild(row);
+  }
+  side.appendChild(list);
+  wrap.appendChild(side);
+  el.append(top, wrap);
+  return el;
+}
+
+function paint(data) {
+  const box = document.getElementById('rows');
+  box.innerHTML = '';
+  if (data.duel) box.appendChild(duelCard(data.duel));
+  for (const r of data.rows) box.appendChild(card(r));
+  document.getElementById('when').textContent = new Date(data.at).toLocaleTimeString();
+}
+
+// The server pushes; the page never asks. An open connection costs nothing per frame, so the
+// boards move at the rate the games are actually played instead of jumping every five seconds.
+// EventSource reconnects by itself, so the server restarting does not need a reload here.
+const src = new EventSource('/api/stream');
+src.onmessage = (e) => { try { paint(JSON.parse(e.data)); } catch (err) { /* partial frame */ } };
+src.onerror = () => { document.getElementById('when').textContent = 'reconnexion…'; };
+</script>
+</body>
+</html>
