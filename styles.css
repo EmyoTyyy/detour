@@ -1,41 +1,90 @@
+/* ============================================================
+   Detour — the look
+   ------------------------------------------------------------
+   Everything visual is a role, and every role is set twice: once for paper and
+   once for the cold dark. On top of that sit four axes you can change from the
+   Appearance screen — palette, corners, pawns, board — each one an attribute on
+   <html> that this file reads. Nothing here is a one-off shade.
+
+   Surfaces are built, not listed: a neutral ramp per mode, with a few percent of
+   the palette's tint mixed into every step. That way a new palette is six colours
+   rather than twenty, and no palette can accidentally wreck the contrast the ramp
+   was chosen for.
+   ============================================================ */
 :root {
-  /* surfaces — one cool gray family */
-  --bg: #0d1014;
-  --bg-deep: #090b0e;
-  --surface: #14191f;
-  --surface-2: #1b212a;
-  --surface-3: #232b35;
-  --line: #29313b;
-  --line-soft: #1e242c;
-  --text: #eaeff5;
-  --muted: #8a94a0;
-  --faint: #5a636f;
+  /* ---------- LIGHT: paper ---------- */
+  --n-bg: #f5f2ee;
+  --n-bg-deep: #e5e1da;
+  --n-surface: #edeae4;
+  --n-surface-2: #e2ded6;
+  --n-surface-3: #dbd6cd;
+  --n-line: #b0a99c;
+  --n-line-soft: #dbd6ce;
+  --n-text: #1b1917;
+  --n-muted: #4c4843;
+  --n-faint: #5f5b54;
+  --scrim: #241f19d9;
+  --shade: #241c12;
+  --lift: 0 6px 18px -12px #3a2e1e66;
+  --tint: var(--pl-tint, #c0552f);
+  --on-accent: var(--pl-on, #fdf7f0);
 
-  /* one accent + the warm/cool player duel */
-  --accent: #57cfc0;
-  --accent-deep: #3fb3a5;
-  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
-  --me: #57cfc0;   /* you — teal (also 4-player seat 0, Bottom) */
-  --opp: #f0a64e;  /* opponent — amber (also 4-player seat 1, Top) */
-  --p2: #9d7be6;   /* 4-player seat 2, Left — violet */
-  --p3: #63c473;   /* 4-player seat 3, Right — green */
-  --me-soft: color-mix(in srgb, var(--me) 14%, transparent);
-  --opp-soft: color-mix(in srgb, var(--opp) 14%, transparent);
-  --danger: #ef6b4e;
-  --danger-soft: color-mix(in srgb, var(--danger) 16%, transparent);
+  --me: var(--pl-me, #b8401f);
+  --opp: var(--pl-opp, #23467e);
+  --p2: var(--pl-p2, #63389b);
+  --p3: var(--pl-p3, #15616d);
+  --good: var(--pl-good, #276021);
+  --danger: var(--pl-danger, #8d1f20);
 
-  /* radius scale — tighter inside, softer outside */
-  --r-xs: 7px;
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 20px;
-  --r-xl: 26px;
+  --v-brilliant: #0f6b63;
+  --v-best:      var(--good);
+  --v-excellent: #446e22;
+  --v-good:      #565f4c;
+  --v-book:      #72562f;
+  --v-inaccuracy:#8a6110;
+  --v-mistake:   #97460b;
+  --v-blunder:   var(--danger);
+  --v-miss:      #8a3826;
 
-  /* flat surfaces: definition comes from 1px borders + background steps, not bevels.
-     one soft, neutral elevation shadow is kept only for things that truly float (modals,
-     the board, the toast) — no white highlight lines, no inset "pressed" depth. */
+  color-scheme: light;
+
+  /* ---------- the ramp, tinted ---------- */
+  /* surfaces take the tint; ink steps take a quarter of it, so text stays neutral
+     enough to read while still belonging to the palette */
+  --bg: color-mix(in srgb, var(--tint) 7%, var(--n-bg));
+  --bg-deep: color-mix(in srgb, var(--tint) 8%, var(--n-bg-deep));
+  --surface: color-mix(in srgb, var(--tint) 7%, var(--n-surface));
+  --surface-2: color-mix(in srgb, var(--tint) 8%, var(--n-surface-2));
+  --surface-3: color-mix(in srgb, var(--tint) 9%, var(--n-surface-3));
+  --line: color-mix(in srgb, var(--tint) 12%, var(--n-line));
+  --line-soft: color-mix(in srgb, var(--tint) 9%, var(--n-line-soft));
+  --text: color-mix(in srgb, var(--tint) 4%, var(--n-text));
+  --muted: color-mix(in srgb, var(--tint) 5%, var(--n-muted));
+  --faint: color-mix(in srgb, var(--tint) 5%, var(--n-faint));
+
+  --accent: var(--me);
+  --accent-deep: color-mix(in srgb, var(--me) 82%, var(--shade));
+  --me-soft: color-mix(in srgb, var(--me) 16%, transparent);
+  --opp-soft: color-mix(in srgb, var(--opp) 16%, transparent);
+  --accent-soft: color-mix(in srgb, var(--accent) 15%, transparent);
+  --good-soft: color-mix(in srgb, var(--good) 16%, transparent);
+  --danger-soft: color-mix(in srgb, var(--danger) 15%, transparent);
+
+  /* ---------- shape: square by default, one attribute away from round ---------- */
+  --r-xs: 2px;
+  --r-sm: 3px;
+  /* A wall is a printed bar, on the board and on the menu's board alike, so both take
+     their corners from here and cannot drift apart. It deliberately does not follow the
+     corner setting: that shapes panels and buttons, and a wall rounded off with them
+     stops reading as a barrier. */
+  --r-wall: 3px;
+  --r-md: 4px;
+  --r-lg: 5px;
+  --r-xl: 6px;
+  --r-pawn: 50%;
+
   --shadow-1: 0 0 0 0 transparent;
-  --shadow-2: 0 16px 40px -24px #04070b;
+  --shadow-2: 0 0 0 0 transparent;
   --shadow-press: 0 0 0 0 transparent;
 
   --cell: clamp(28px, 8.4vmin, 56px);
@@ -44,17 +93,157 @@
   --ease: cubic-bezier(.22, .61, .36, 1);
   --spring: cubic-bezier(.34, 1.56, .64, 1);
 
-  font-family: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Three voices. Bricolage is a display grotesque drawn with its irregularities
+     left in, which is where the page gets its character; Space Grotesk operates the
+     interface; Space Mono — Space Grotesk's own ancestor, so they fit without being
+     introduced — speaks for the machine: clocks, codes, notation, evaluations. */
+  --font-display: "Bricolage Grotesque", "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-ui: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  font-family: var(--font-ui);
+}
+
+/* ---------- DARK: cold ---------- */
+/* One block, applied from two places: whatever the system says, and whatever the
+   Appearance screen says, which wins. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --n-bg: #0c0e12;
+    --n-bg-deep: #07080b;
+    --n-surface: #14171e;
+    --n-surface-2: #1c202a;
+    --n-surface-3: #262b37;
+    --n-line: #39404f;
+    --n-line-soft: #1f232c;
+    --n-text: #e9ebf0;
+    --n-muted: #a2aab8;
+    --n-faint: #8e98a8;
+    --scrim: #04060ae6;
+    --shade: #05070c;
+    --lift: 0 8px 22px -14px #000000e6;
+    --tint: var(--pd-tint, #3b6ea8);
+    --on-accent: var(--pd-on, #1a0c07);
+
+    --me: var(--pd-me, #ff5c3b);
+    --opp: var(--pd-opp, #4e9fff);
+    --p2: var(--pd-p2, #a78bfa);
+    --p3: var(--pd-p3, #2dd4bf);
+    --good: var(--pd-good, #3ddc84);
+    --danger: var(--pd-danger, #ef5a5f);
+
+    --v-brilliant: #2dd4bf;
+    --v-best:      var(--good);
+    --v-excellent: #86d95f;
+    --v-good:      #9aa8b8;
+    --v-book:      #c0a16b;
+    --v-inaccuracy:#facc15;
+    --v-mistake:   #fb923c;
+    --v-blunder:   var(--danger);
+    --v-miss:      #f08a7a;
+
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --n-bg: #0c0e12;
+  --n-bg-deep: #07080b;
+  --n-surface: #14171e;
+  --n-surface-2: #1c202a;
+  --n-surface-3: #262b37;
+  --n-line: #39404f;
+  --n-line-soft: #1f232c;
+  --n-text: #e9ebf0;
+  --n-muted: #a2aab8;
+  --n-faint: #8e98a8;
+  --scrim: #04060ae6;
+  --shade: #05070c;
+  --lift: 0 8px 22px -14px #000000e6;
+  --tint: var(--pd-tint, #3b6ea8);
+  --on-accent: var(--pd-on, #1a0c07);
+
+  --me: var(--pd-me, #ff5c3b);
+  --opp: var(--pd-opp, #4e9fff);
+  --p2: var(--pd-p2, #a78bfa);
+  --p3: var(--pd-p3, #2dd4bf);
+  --good: var(--pd-good, #3ddc84);
+  --danger: var(--pd-danger, #ef5a5f);
+
+  --v-brilliant: #2dd4bf;
+  --v-best:      var(--good);
+  --v-excellent: #86d95f;
+  --v-good:      #9aa8b8;
+  --v-book:      #c0a16b;
+  --v-inaccuracy:#facc15;
+  --v-mistake:   #fb923c;
+  --v-blunder:   var(--danger);
+  --v-miss:      #f08a7a;
+
+  color-scheme: dark;
+}
+
+/* ============================================================
+   Appearance — palette, corners, pawns, board
+   ------------------------------------------------------------
+   Four attributes on <html>, each independent of the others and of the theme.
+   A palette is six colours per mode, not a stylesheet: the ramp above mixes the
+   tint into every surface, so a new one cannot break the contrast the neutral
+   steps were picked for.
+   ============================================================ */
+
+/* Press — vermilion against ink blue on paper; hot orange against electric blue in
+   the cold. The one the game shipped with. */
+:root[data-palette="press"] {
+  --pl-tint: #c0552f; --pl-me: #b8401f; --pl-opp: #23467e; --pl-good: #276021;
+  --pl-danger: #8d1f20; --pl-p2: #63389b; --pl-p3: #15616d; --pl-on: #fdf7f0;
+  --pd-tint: #3b6ea8; --pd-me: #ff5c3b; --pd-opp: #4e9fff; --pd-good: #3ddc84;
+  --pd-danger: #ef5a5f; --pd-p2: #a78bfa; --pd-p3: #2dd4bf; --pd-on: #1a0c07;
+}
+/* Dusk — ochre against violet. Warmer paper, an aubergine-tinted dark. */
+:root[data-palette="dusk"] {
+  --pl-tint: #8c6a46; --pl-me: #8f5405; --pl-opp: #57338f; --pl-good: #276021;
+  --pl-danger: #8d1f20; --pl-p2: #146b62; --pl-p3: #a03468; --pl-on: #fff8ec;
+  --pd-tint: #6b4fa8; --pd-me: #f5a524; --pd-opp: #b394fb; --pd-good: #4ade80;
+  --pd-danger: #ef5a5f; --pd-p2: #2dd4bf; --pd-p3: #f472b6; --pd-on: #1d1403;
+}
+/* Signal — magenta against cyan. The loudest of the four. */
+:root[data-palette="signal"] {
+  --pl-tint: #7d3c6e; --pl-me: #a3176b; --pl-opp: #0b5f72; --pl-good: #276021;
+  --pl-danger: #9b1d2e; --pl-p2: #8a6100; --pl-p3: #553bab; --pl-on: #fff0f8;
+  --pd-tint: #2f5f73; --pd-me: #ff4d9d; --pd-opp: #22d3ee; --pd-good: #4ade80;
+  --pd-danger: #f4616b; --pd-p2: #fbbf24; --pd-p3: #a78bfa; --pd-on: #1d0512;
+}
+/* Moss — rust against deep teal, with the green pushed to lime so "correct" can never
+   be mistaken for the opponent. */
+:root[data-palette="moss"] {
+  --pl-tint: #6c7a4e; --pl-me: #9c4a1f; --pl-opp: #15616d; --pl-good: #3d5a0d;
+  --pl-danger: #8d1f20; --pl-p2: #5b3aa6; --pl-p3: #8a6100; --pl-on: #fff6ee;
+  --pd-tint: #3f5a4a; --pd-me: #fb8b3c; --pd-opp: #2dd4bf; --pd-good: #a3e635;
+  --pd-danger: #ef5a5f; --pd-p2: #a78bfa; --pd-p3: #fbbf24; --pd-on: #1c0f04;
+}
+
+/* ---------- corners ---------- */
+:root[data-shape="round"] {
+  --r-xs: 6px;
+  --r-sm: 9px;
+  --r-md: 13px;
+  --r-lg: 18px;
+  --r-xl: 24px;
 }
 
 * { box-sizing: border-box; }
+
+/* Any explicit display in this file outranks the browser's own [hidden] rule, and every
+   time that has happened it leaked a control onto a screen it did not belong on — a
+   Restart and an Import button sitting in a live online game, for one. The attribute is
+   how this app hides things, so it is settled once here rather than patched per component. */
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
   min-height: 100%;
   color: var(--text);
-  background:
-    radial-gradient(130% 90% at 50% -10%, #18222b 0%, var(--bg) 52%, var(--bg-deep) 100%);
+  background: var(--bg);
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
 }
@@ -66,9 +255,13 @@ body::after {
   inset: 0;
   z-index: 40;
   pointer-events: none;
-  opacity: .035;
-  mix-blend-mode: overlay;
+  opacity: .045;
+  mix-blend-mode: multiply;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+:root[data-theme="dark"] body::after { mix-blend-mode: overlay; opacity: .05; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body::after { mix-blend-mode: overlay; opacity: .05; }
 }
 
 /* build marker, tucked in the corner */
@@ -86,7 +279,7 @@ body::after {
   opacity: .75;
 }
 
-/* atmospheric canvas — sits behind everything, lets the body gradient show through */
+/* the drifting board — sits behind everything, over the flat page ground */
 #bg {
   position: fixed;
   inset: 0;
@@ -122,81 +315,31 @@ body::after {
   text-align: center;
 }
 
-.brand { display: flex; align-items: center; gap: 16px; animation: rise .5s var(--ease) both; }
-.brand-mark { display: block; filter: drop-shadow(0 6px 14px #04070b99); }
+.brand { display: flex; align-items: center; gap: 15px; animation: rise .5s var(--ease) both; }
+.brand-mark { display: block; }
+/* The name is set, not effected: the display face at full weight, one ink, and a rule
+   under it in the accent — a masthead rather than a gradient. */
 .brand-title {
   margin: 0;
-  font-size: clamp(46px, 12vmin, 88px);
-  font-weight: 700;
-  letter-spacing: -0.045em;
+  font-family: var(--font-display);
+  font-size: clamp(40px, 10vmin, 68px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
   line-height: .9;
-  background: linear-gradient(102deg, var(--me) 8%, #cfe7e2 42%, var(--opp) 96%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.menu-groups {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(216px, 1fr));
-  gap: 26px 26px;
-  width: min(780px, 94vw);
-  text-align: left;
-}
-.menu-group { display: flex; flex-direction: column; gap: 11px; }
-.group-label {
-  margin: 0 0 3px 3px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .22em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-
-.game-card {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  border: none;
-  border-radius: var(--r-md);
-  background: var(--surface);
-  box-shadow: var(--shadow-1), inset 0 0 0 1px var(--line-soft);
   color: var(--text);
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  transition: transform .22s var(--spring), box-shadow .22s var(--ease), background .22s var(--ease);
-  animation: rise .5s var(--ease) both;
+  padding-bottom: .09em;
+  border-bottom: 4px solid var(--accent);
 }
-.menu-group:nth-child(1) .game-card { animation-delay: .04s; }
-.menu-group:nth-child(2) .game-card { animation-delay: .10s; }
-.menu-group:nth-child(3) .game-card { animation-delay: .16s; }
+
+.menu-group:nth-child(1) 
+.menu-group:nth-child(2) 
+.menu-group:nth-child(3) 
 .game-card:not(.disabled):hover {
   transform: translateY(-2px);
   background: var(--surface-2);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, var(--line));
 }
 .game-card:not(.disabled):active { transform: translateY(0); box-shadow: inset 0 0 0 1px var(--line); }
-.game-card.disabled { opacity: .5; cursor: default; }
-
-.card-icon {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-sm);
-  background: var(--surface-3);
-  color: var(--accent);
-}
-.card-icon svg { width: 22px; height: 22px; }
-.game-card.disabled .card-icon { color: var(--muted); }
-
-.card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.card-name { font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
-.card-sub { font-size: 12.5px; color: var(--muted); }
 
 .soon {
   position: absolute;
@@ -237,6 +380,32 @@ body::after {
 .setup-block { display: flex; flex-direction: column; gap: 9px; }
 .setup-block[hidden] { display: none; }
 .setup-label { font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+
+/* Path's strength dial. The number is the point of the control, so it gets tabular figures
+   and room for four digits — it must not shuffle sideways as the handle moves. */
+.elo-row { display: flex; align-items: center; gap: 14px; }
+.elo-row input[type=range] {
+  flex: 1; appearance: none; -webkit-appearance: none; background: none; height: 22px; margin: 0; cursor: pointer;
+}
+.elo-row input[type=range]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px; background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.elo-row input[type=range]::-moz-range-track {
+  height: 4px; border-radius: 2px; background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.elo-row input[type=range]::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none; width: 16px; height: 16px; margin-top: -7px;
+  border-radius: 50%; background: var(--tint); border: 2px solid var(--surface);
+}
+.elo-row input[type=range]::-moz-range-thumb {
+  width: 16px; height: 16px; border: 2px solid var(--surface); border-radius: 50%; background: var(--tint);
+}
+.elo-row input[type=range]:focus-visible { outline: 2px solid var(--tint); outline-offset: 3px; }
+.elo-val {
+  min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums;
+  font-size: 17px; font-weight: 650; color: var(--text);
+}
+.elo-note { margin: 0; font-size: 12px; color: var(--faint); }
 .overlay-card .setup-block { margin-bottom: 22px; }
 .settings-row[hidden] { display: none; }   /* the .settings-row class would otherwise beat [hidden] */
 
@@ -312,7 +481,7 @@ body::after {
   transition: background .16s var(--ease), box-shadow .16s var(--ease), color .16s var(--ease);
 }
 .seg-btn:hover { background: var(--surface-2); color: var(--text); }
-.seg-btn.on { background: var(--accent); color: #062520; box-shadow: none; }
+.seg-btn.on { background: var(--accent); color: var(--on-accent); box-shadow: none; }
 
 /* on/off modifier toggle */
 .toggle-btn {
@@ -330,7 +499,7 @@ body::after {
   transition: background .16s var(--ease), box-shadow .16s var(--ease), color .16s var(--ease);
 }
 .toggle-btn:hover { background: var(--surface-2); color: var(--text); }
-.toggle-btn.on { background: var(--accent); color: #062520; box-shadow: none; }
+.toggle-btn.on { background: var(--accent); color: var(--on-accent); box-shadow: none; }
 
 /* settings host: base steppers row + a Modifiers dropdown */
 .settings-host { display: flex; flex-direction: column; align-items: center; gap: 11px; width: 100%; }
@@ -343,7 +512,11 @@ body::after {
   overflow: hidden;
 }
 .mods-summary {
-  list-style: none;
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   user-select: none;
   padding: 11px 14px;
@@ -355,11 +528,21 @@ body::after {
   justify-content: space-between;
   gap: 8px;
 }
-.mods-summary::-webkit-details-marker { display: none; }
-.mods-summary::after { content: "▾"; color: var(--faint); }
-.mods[open] .mods-summary::after { content: "▴"; }
+.mods-summary::after { content: "▾"; color: var(--faint); transition: transform .26s var(--ease); }
+.mods[data-open="true"] .mods-summary::after { transform: rotate(180deg); }
 .mods-summary:hover { color: var(--text); background: var(--surface-2); }
+/* the 0fr -> 1fr grid trick: a real height animation with no measuring and no JS */
+.mods-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows .26s var(--ease);
+}
+.mods-body > * { overflow: hidden; min-height: 0; }
+/* nothing on the collapsing child may have padding of its own — see mountSettings */
+.mods-clip { padding: 0; }
+.mods[data-open="true"] .mods-body { grid-template-rows: 1fr; }
 .mods-grid { padding: 14px; box-shadow: inset 0 1px 0 var(--line-soft); }
+@media (prefers-reduced-motion: reduce) { .mods-body { transition: none; } }
 
 /* pre-placed neutral walls (random-walls modifier) — owned by nobody */
 .wall.neutral { background: var(--muted); }
@@ -399,9 +582,10 @@ body::after {
 
 .panel-title {
   margin: 0;
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
   text-align: center;
 }
 
@@ -411,7 +595,7 @@ body::after {
   flex-direction: column;
   align-items: center;
   gap: 18px;
-  width: min(340px, 92vw);
+  width: min(340px, 100%);
   text-align: center;
 }
 #online-choice { display: flex; flex-direction: column; gap: 22px; }
@@ -438,22 +622,8 @@ body::after {
 .code-input::placeholder { color: var(--faint); letter-spacing: .2em; }
 .code-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }
 
-#room-display { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 2px; }
-#room-display[hidden] { display: none; }
 #friend-lobby { width: 100%; }
 #friend-lobby[hidden] { display: none; }   /* the ID rule above otherwise overrode the hidden attribute, leaking a "----" code block onto the menu */
-.room-label { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
-.room-code {
-  font-size: 42px;
-  font-weight: 700;
-  letter-spacing: .22em;
-  text-indent: .22em;
-  color: var(--accent);
-  padding: 10px 20px;
-  border-radius: var(--r-md);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
 .online-status { font-size: 13.5px; color: var(--muted); min-height: 20px; }
 .btn.big { padding: 15px 22px; font-size: 16px; width: 100%; }
 
@@ -489,7 +659,7 @@ body::after {
 /* ---------- Tournament card (local setup, online lobby, standings) ---------- */
 .tcard {
   margin: auto;
-  width: min(420px, 94vw);
+  width: min(420px, 100%);
   border-radius: var(--r-lg);
   background: var(--surface-2);
   box-shadow: var(--shadow-2), inset 0 0 0 1px var(--line);
@@ -612,7 +782,7 @@ body::after {
 /* ---------- Tournament chat ---------- */
 .chat {
   margin: 14px auto 0;
-  width: min(420px, 94vw);
+  width: min(420px, 100%);
   border-radius: var(--r-md);
   background: var(--surface);
   box-shadow: var(--shadow-1), inset 0 0 0 1px var(--line-soft);
@@ -657,10 +827,17 @@ body::after {
   gap: 12px;
   padding: 16px 16px 24px;
   width: 100%;
+  /* dragging a wall across labels and coordinates would otherwise select them and leave a
+     smear of highlighted text behind the gesture */
+  -webkit-user-select: none;
+  user-select: none;
 }
+/* …except the things you actually read and copy */
+#game input, #game .chat-log { -webkit-user-select: text; user-select: text; }
 
 .hud {
-  width: min(560px, 96vw);
+  width: min(560px, 100%);
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -674,12 +851,16 @@ body::after {
   align-items: center;
   gap: 12px;
 }
-.match-actions { display: flex; gap: 10px; justify-content: center; }
+/* Wrapping is not cosmetic here. In the wide layout this rail lives in a fixed 190px column
+   beside the board, and its buttons are `flex: 0 0 auto` — five of them are 240px and seven
+   are 340px, so without wrapping they do not shrink or clip, they simply paint outside the
+   column and straight over the board. */
+.match-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .match-actions[hidden] { display: none; }
 
 /* ---------- Move list (chess-style, absolute coordinates) ---------- */
 .moves {
-  width: min(560px, 96vw);
+  width: min(560px, 100%);
   display: flex;
   flex-direction: column;
   max-height: 240px;
@@ -688,6 +869,41 @@ body::after {
   box-shadow: inset 0 0 0 1px var(--line-soft);
   overflow: hidden;
 }
+/* The named opening, between the panel's heading and the move list. It borrows the panel's
+   own surface rather than sitting on a card of its own: it is part of the move list's story,
+   not a separate object, and it is present for at most the first few moves of a game. */
+.opening {
+  padding: 10px 16px 12px;
+  box-shadow: inset 0 -1px 0 var(--line-soft);
+}
+.opening[hidden] { display: none; }
+.opening-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.opening-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.opening-src {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.opening-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
 .moves-head {
   padding: 10px 16px;
   font-size: 11px;
@@ -707,7 +923,7 @@ body::after {
   text-align: center;
 }
 .mv-row { display: grid; grid-template-columns: 36px 1fr 1fr; align-items: stretch; }
-.mv-row:nth-child(even) { background: #ffffff05; }
+.mv-row:nth-child(even) { background: color-mix(in srgb, var(--text) 3%, transparent); }
 /* 4-player: one column per seat, so a row holds a full clockwise round */
 .moves-list.four .mv-row { grid-template-columns: 34px repeat(4, 1fr); }
 .moves-list.four .mv-cell { padding: 7px 8px; gap: 5px; font-size: 12.5px; }
@@ -733,7 +949,7 @@ body::after {
 .mv-empty { color: transparent; }
 
 /* right side column: move list, plus the tournament chat while playing */
-.side-right { width: min(560px, 96vw); display: flex; flex-direction: column; gap: 12px; }
+.side-right { width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; }
 .side-right .moves, .side-right .game-chat { width: auto; }
 .game-chat { margin: 0; }
 .game-chat .chat-log { max-height: 150px; }
@@ -768,7 +984,13 @@ body::after {
 .forfeit-btn:hover { color: var(--danger); background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger); }
 
 .status {
+  /* `flex: 1` alone still lets the text set this element's intrinsic width, which the HUD then
+     reports upward as ITS minimum — so one long status line (the new "waiting for an opponent")
+     widened the whole game screen past the phone it was on. A zero base width makes the line
+     grow into whatever room is left and truncate when there is none, which is what the ellipsis
+     below was always for. */
   flex: 1;
+  width: 0;
   text-align: center;
   font-size: 14px;
   font-weight: 500;
@@ -782,7 +1004,7 @@ body::after {
 
 /* ---------- Wall rails (opponent on top, you on the bottom) ---------- */
 .rail {
-  width: min(560px, 96vw);
+  width: min(560px, 100%);
   display: flex;
   align-items: center;
   gap: 9px;
@@ -834,6 +1056,11 @@ body::after {
 }
 .wtoken.grab { cursor: grab; }
 .wtoken.grab:hover { transform: translateY(-2px); }
+/* picked up by a click: held out of the row until you place it or put it back */
+.wtoken.grab.armed {
+  transform: translateY(-5px);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--pc);
+}
 .wtoken.vert { width: 9px; height: 26px; }
 .wtoken { background: var(--pc); }
 
@@ -883,6 +1110,7 @@ body::after {
 
 /* ---------- Board ---------- */
 .board-wrap {
+  position: relative;
   padding: 12px;
   border-radius: var(--r-lg);
   background: var(--surface);
@@ -890,10 +1118,25 @@ body::after {
 }
 
 /* coordinate frame: rank numbers down the left, file letters across the bottom.
-   --board-span (set in JS = N + (N-1)*0.22) makes the board fit its space at any size. */
+   --board-span-w / -h (set in JS = cells + gaps*0.22, per axis) make the board fit its space at
+   any size — the two sides are independent, so non-square boards get sized off both. */
 .board-frame {
-  --board-span: 10.76;
-  --cell: min(clamp(26px, 8.4vmin, 56px), calc(94vw / var(--board-span)));
+  --board-span-w: 10.76;
+  --board-span-h: 10.76;
+  /* the eval bar sits beside the board and the review scrubber below it, so both have to
+     come out of the board's budget or a phone-width board runs off the screen */
+  --side-reserve: 0px;
+  --vert-reserve: 250px;
+  /* Everything standing between the board and the edge of the window, which the budget has to
+     hand back or the board pushes the whole page sideways on a phone: #game's 16px padding
+     twice, .board-wrap's 12px twice, the rank strip (~14px), and an allowance for a scrollbar
+     that 100vw counts but you cannot draw on. */
+  --board-chrome: 88px;
+  --cell: max(18px, min(
+    clamp(26px, 8.4vmin, 56px),
+    calc((100vw - var(--board-chrome) - var(--side-reserve)) / var(--board-span-w)),
+    calc((100dvh - var(--vert-reserve)) / var(--board-span-h))   /* a tall board still has to fit the screen */
+  ));
   --gap: calc(var(--cell) * 0.22);
   display: grid;
   grid-template-columns: auto auto;
@@ -946,21 +1189,66 @@ body::after {
 .cell.goal-bottom { box-shadow: inset 0 -3px 0 var(--pc); }
 .cell.goal-left { box-shadow: inset 3px 0 0 var(--pc); }
 .cell.goal-right { box-shadow: inset -3px 0 0 var(--pc); }
-.cell.goal-top, .cell.goal-bottom, .cell.goal-left, .cell.goal-right { background: color-mix(in srgb, var(--pc) 13%, var(--surface-3)); }
+.cell.goal-top, .cell.goal-bottom, .cell.goal-left, .cell.goal-right { background: color-mix(in srgb, var(--pc) 9%, var(--surface-3)); }
+/* king of the hill: the single centre cell everyone is racing. Ringed on all four sides rather
+   than barred on one, because no edge owns it — and neutral gray for the same reason as race. */
+.cell.goal-hill {
+  --pc: var(--muted);
+  background: color-mix(in srgb, var(--muted) 30%, var(--surface-3));
+  box-shadow: inset 0 0 0 3px var(--muted);
+}
+/* A target ring inside it: one cell on a big board has to carry the whole objective, and the
+   border alone reads as just another cell from across the room. Sized to stay clear of the move
+   dot in every state — the dot's footprint is 40.4% of the cell, 50.5% hovered and 56.6% as a
+   pawn-drop target, so the ring's inner edge sits at 60.6%. Its border scales for the same
+   reason the halo does: a fixed 2px would eat a tenth of the ring on a 15-wide board. */
+/* The ring and the move dot must be exactly concentric AND smoothly antialiased.
+   Concentric: two differently-sized boxes can't be relied on — flexbox, insets, or a translate of
+   half the element's own size all round each box to device pixels independently, so at the board's
+   fractional cell sizes (47.5px, 69.047px…) the two landed up to a pixel apart and the thin ring
+   visibly missed the dot. So both pseudo-elements take the *same* box: the whole cell, inset: 0,
+   no arithmetic left to round.
+   Smooth: the circle itself is a border-radius edge, which the compositor antialiases — a
+   radial-gradient hard stop does not, and comes out visibly stair-stepped. Each circle is then
+   sized by scaling that shared box, which keeps one common centre and skips pixel snapping.
+   Widths are pre-divided by the scale so they land on the intended size: 0.017 / 0.64 = 0.0266. */
+.cell.goal-hill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: max(1.5625px, calc(var(--cell) * 0.0266)) solid color-mix(in srgb, var(--muted) 45%, var(--text));
+  transform: scale(0.64);      /* ring outer diameter = 64% of the cell */
+}
+
+/* race: one finish line shared by both pawns, so it's neutral gray — a player colour here would
+   read as "that player's goal", which is exactly what race does away with */
+.cell.goal-shared {
+  --pc: var(--muted);
+  background: color-mix(in srgb, var(--muted) 26%, var(--surface-3));
+  box-shadow: inset 0 4px 0 var(--muted);
+}
 .cell.hole { background: none; box-shadow: none; pointer-events: none; }
 
 .cell.movable { cursor: pointer; }
+/* Same full-cell box as the hill ring above, so the two share one centre exactly, and the same
+   border-radius + scale so the edge is antialiased. The halo used to be a flat 5px box-shadow
+   while the dot was 32% of the cell, so on smaller boards it grew past the ring; its spread is
+   now a fraction of the cell, pre-divided by the scale (0.042 / 0.32 = 0.13125) so the dot still
+   sits in a 40.4% halo — 5px at the largest cells, exactly as it looked before. */
 .cell.movable::after {
   content: "";
-  width: 32%;
-  height: 32%;
+  position: absolute;
+  inset: 0;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 5px var(--accent-soft);
+  box-shadow: 0 0 0 calc(var(--cell) * 0.13125) var(--accent-soft);
   opacity: .9;
+  transform: scale(0.32);      /* dot diameter = 32% of the cell */
   transition: transform .14s var(--spring);
 }
-.cell.movable:hover::after { transform: scale(1.25); }
+.cell.movable:hover::after { transform: scale(0.4); }     /* 0.32 x 1.25, about the shared centre */
 
 /* player colours: every coloured piece reads --pc, set by its seat/relationship class */
 .mine, .p0, .mv-me, .mv-p0 { --pc: var(--me); }
@@ -968,18 +1256,20 @@ body::after {
 .p2, .mv-p2 { --pc: var(--p2); }
 .p3, .mv-p3 { --pc: var(--p3); }
 
-/* pawns are the one deliberately 3D element — a shaded sphere you can pick up */
+/* A pawn is a flat token: solid ink, one darker ring pressed into it. It used to be a
+   shaded sphere with a specular highlight, which was the only thing on the board pretending
+   to be a physical object — everything else is printed, and now so is this. */
 .pawn {
-  width: 70%;
-  height: 70%;
+  width: 68%;
+  height: 68%;
   border-radius: 50%;
   position: relative;
   z-index: 1;
-  background: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--pc) 12%, #ffffff) 0%, var(--pc) 52%, color-mix(in srgb, var(--pc) 62%, #000) 100%);
-  box-shadow: 0 3px 6px -1px #04070b99, inset 0 2px 4px #ffffff5e, inset 0 -5px 8px #00000055;
+  background: var(--pc);
+  box-shadow: inset 0 0 0 max(2px, calc(var(--cell) * 0.055)) color-mix(in srgb, var(--pc) 52%, var(--shade));
 }
 .pawn.draggable { cursor: grab; touch-action: none; }
-.pawn.draggable:hover { transform: scale(1.05); }
+.pawn.draggable:hover { transform: scale(1.06); }
 .pawn.lifted { opacity: .35; }
 .pawn-ghost {
   position: fixed;
@@ -991,13 +1281,13 @@ body::after {
 }
 /* highlight the legal cell a dragged pawn is hovering */
 .cell.drop { box-shadow: inset 0 0 0 2px var(--accent); }
-.cell.drop::after { transform: scale(1.4); }
+.cell.drop::after { transform: scale(0.448); }            /* 0.32 x 1.4 */
 
 /* placed walls — flat, coloured by who placed them */
 .wall {
   position: relative;
   z-index: 2;
-  border-radius: 3px;
+  border-radius: var(--r-wall);
 }
 .wall { background: var(--pc); }
 
@@ -1012,8 +1302,8 @@ body::after {
   opacity: 0;
   pointer-events: none;
 }
-.board.placing .wjunction { opacity: 1; pointer-events: auto; }
-.board.placing .wjunction::after {
+.board.placing .wjunction, .board.setup .wjunction { opacity: 1; pointer-events: auto; }
+.board.placing .wjunction::after, .board.setup .wjunction::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -1026,15 +1316,15 @@ body::after {
 }
 
 .preview { z-index: 4; border-radius: 4px; pointer-events: none; opacity: .9; }
-.preview.ok { background: var(--pc); box-shadow: 0 0 14px color-mix(in srgb, var(--pc) 35%, transparent); }
+.preview.ok { background: var(--pc); }
 .preview.bad { background: var(--danger); opacity: .85; }
 
 .drag-ghost {
   position: fixed;
   transform: translate(-50%, -50%);
   border-radius: 3px;
-  box-shadow: 0 6px 16px -8px #04070b;
-  opacity: .94;
+  box-shadow: var(--lift);
+  opacity: .96;
   pointer-events: none;
   z-index: 70;
 }
@@ -1048,13 +1338,12 @@ body::after {
   align-items: center;
   justify-content: center;
   padding: 22px;
-  background: #06080bd0;
-  backdrop-filter: blur(5px);
+  background: var(--scrim);
   z-index: 50;
 }
 .overlay.is-active { display: flex; animation: fade .18s var(--ease); }
 .overlay-card {
-  width: min(420px, 94vw);
+  width: min(420px, 100%);
   background: var(--surface-2);
   border-radius: var(--r-xl);
   padding: 30px 26px;
@@ -1062,8 +1351,12 @@ body::after {
   box-shadow: var(--shadow-2), inset 0 0 0 1px var(--line);
   animation: pop .22s var(--spring);
 }
-.overlay-card h2 { margin: 0 0 18px; font-size: 23px; font-weight: 700; letter-spacing: -0.02em; }
-#win-title { margin: 0 0 6px; font-size: 32px; letter-spacing: -0.03em; }
+.overlay-card h2 {
+  margin: 0 0 18px;
+  font-family: var(--font-display);
+  font-size: 26px; font-weight: 800; letter-spacing: -0.03em;
+}
+#win-title { margin: 0 0 6px; font-size: 36px; letter-spacing: -0.04em; }
 .win-sub { margin: 0 0 22px; color: var(--muted); }
 .overlay-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
@@ -1080,12 +1373,12 @@ body::after {
   cursor: pointer;
   transition: transform .18s var(--spring), box-shadow .18s var(--ease), background .18s var(--ease);
 }
-.btn:hover { transform: translateY(-1px); background: var(--surface-2); }
+.btn:hover { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
 .btn:active { transform: translateY(1px); }
 .btn.primary {
   background: var(--accent);
   box-shadow: none;
-  color: #062520;
+  color: var(--on-accent);
 }
 .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, white); }
 .btn.ghost { background: none; box-shadow: none; color: var(--muted); }
@@ -1096,29 +1389,60 @@ body::after {
 .btn.ghost.icon-action { box-shadow: inset 0 0 0 1px var(--line); }
 .btn.ghost.icon-action:hover { color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); background: var(--danger-soft); }
 
-/* difficulty picker */
-.diff-list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 20px; }
-.diff-btn {
+/* ---------- Play vs Computer: a screen, not a popup ---------- */
+.setup-panel { width: min(560px, 100%); gap: 20px; }
+/* capped, so opening the modifiers to the side widens the settings and not the bots */
+.bot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; max-width: 620px; margin: 0 auto; }
+.bot-card {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 13px 15px;
+  gap: 3px;
+  padding: 16px 12px 14px;
   border: none;
   border-radius: var(--r-md);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--line-soft);
   color: var(--text);
-  font-family: inherit;
+  font: inherit;
+  text-align: center;
   cursor: pointer;
-  text-align: left;
   transition: transform .18s var(--spring), box-shadow .18s var(--ease), background .18s var(--ease);
 }
-.diff-btn:hover { transform: translateY(-2px); background: var(--surface-2); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, var(--line)); }
-.diff-main { display: flex; flex-direction: column; gap: 2px; }
-.diff-name { font-size: 15.5px; font-weight: 600; }
-.diff-sub { font-size: 12px; color: var(--muted); }
-.diff-rec { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--faint); white-space: nowrap; }
+.bot-card:hover { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+.bot-card.is-sel { background: var(--surface-2); box-shadow: inset 0 0 0 2px var(--accent); }
+.bot-face {
+  display: grid; place-items: center;
+  width: 46px; height: 46px;
+  margin-bottom: 5px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--muted);
+  transition: color .18s var(--ease), background .18s var(--ease);
+}
+.bot-card.is-sel .bot-face { color: var(--accent); background: var(--accent-soft); }
+.bot-face svg { width: 26px; height: 26px; }
+.bot-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.bot-sub { font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+.bot-rec { margin-top: 5px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--faint); }
+.bot-card.is-sel .bot-rec { color: var(--muted); }
+/* narrow: the three cards become three rows, face | name over blurb | record */
+@media (max-width: 540px) {
+  .bot-grid { grid-template-columns: 1fr; gap: 7px; }
+  .bot-card {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: "face name rec" "face sub rec";
+    align-items: center;
+    gap: 1px 13px;
+    padding: 11px 14px;
+    text-align: left;
+  }
+  .bot-face { grid-area: face; width: 40px; height: 40px; margin-bottom: 0; }
+  .bot-name { grid-area: name; align-self: end; }
+  .bot-sub { grid-area: sub; align-self: start; }
+  .bot-rec { grid-area: rec; margin-top: 0; }
+}
 
 .how-card { text-align: left; }
 .how-card h2 { text-align: center; }
@@ -1137,7 +1461,7 @@ body::after {
   box-shadow: var(--shadow-2), inset 0 0 0 1px var(--line);
   color: var(--text);
   padding: 11px 18px;
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   font-size: 13.5px;
   font-weight: 500;
   opacity: 0;
@@ -1149,24 +1473,25 @@ body::after {
 
 /* ---------- Wide screens: use the sides (info left, board centre, moves right) ---------- */
 @media (min-width: 1140px) {
-  .hud { width: min(1080px, 96vw); }
+  .hud { width: min(1080px, 100%); }
   /* board fills the viewport height — bounded by the width left between the side columns,
-     and a sane cap — so it never overflows. A 9-cell + 8-gap board spans cell*10.8.
+     and a sane cap — so it never overflows. A 9-cell + 8-gap side spans cell*10.8.
      Set on the frame so the rank/file labels inherit the same cell/gap and stay aligned. */
   .board-frame {
-    --cell: min(calc((100dvh - 170px) / var(--board-span)), calc((100vw - 530px) / var(--board-span)), 120px);
+    --cell: min(calc((100dvh - 170px) / var(--board-span-h)), calc((100vw - 530px - var(--side-reserve)) / var(--board-span-w)), 120px);
     --gap: calc(var(--cell) * 0.22);
   }
   .play {
     display: grid;
     width: auto;
     grid-template-columns: 190px max-content 230px;
-    grid-template-rows: auto 1fr auto auto;
+    grid-template-rows: auto 1fr auto auto auto;
     grid-template-areas:
       "rtop  board moves"
       "fill  board moves"
+      "ract  board moves"
       "rbot  board moves"
-      "ract  board moves";
+      ".     rnav  moves";
     align-items: start;
     justify-content: center;
     gap: 14px;
@@ -1174,9 +1499,54 @@ body::after {
   #rail-top { grid-area: rtop; }
   .board-wrap { grid-area: board; align-self: center; }
   #tray { grid-area: rbot; align-self: end; }
-  #match-actions { grid-area: ract; align-self: start; justify-content: flex-start; margin-top: 2px; }
-  .side-right { grid-area: moves; align-self: stretch; width: 230px; }
-  .moves { flex: 1; min-height: 120px; max-height: none; }
+  /* Above the wall supply, not below it: the buttons are things you do to the game, the tray
+     under them is the game itself, and the two were the wrong way round. align-self:end keeps
+     the pair sitting together at the foot of the column. */
+  #match-actions { grid-area: ract; align-self: end; justify-content: flex-start; margin-bottom: 2px; }
+  /* The analysis board shows five of these and the column is 190px wide, so at the default
+     40px on a 10px gap they wrap 4 + 1 and the fifth looks dropped. 32px on a 6px gap is
+     184px: one row, and still a mouse target -- this block is the pointer layout only, and the
+     narrow layout has its own 34px rule for the rail once it rides in the hud. */
+  #match-actions { gap: 6px; }
+  #match-actions .icon-btn { width: 32px; height: 32px; font-size: 17px; }
+  #match-actions .icon-btn svg { width: 16px; height: 16px; }
+  /* The "fill" area is the empty stretch between the two wall boxes; it was already in the
+     template, holding the rails apart, with nothing in it. */
+  /* By id, like #rail-top and #tray beside it: the base rule that keeps this hidden is further
+     down the file than this block, and a bare class here would simply lose to it. */
+  #lesson-line {
+    grid-area: fill; display: block; width: 190px; align-self: start;
+    padding: 13px 15px;
+    border-radius: var(--r-md);
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+  }
+  #lesson-line[hidden] { display: none; }
+  /* the review scrubber gets its own row under the board, and the board gives back the
+     height it takes so nothing overflows the viewport */
+  /* The scrubber belongs under the BOARD, not under the board plus the rail beside it —
+     spanning both columns put it 120px to the left of the thing it scrubs. */
+  #rv-nav, .tb-bar { grid-area: rnav; justify-self: center; }
+  #game.reviewing .board-frame {
+    --cell: min(calc((100dvh - 232px) / var(--board-span-h)), calc((100vw - 580px - var(--side-reserve)) / var(--board-span-w)), 120px);
+  }
+  /* a live game gives back the same height for the same bar; the side column is unchanged,
+     so only the vertical term moves */
+  #game.scrubbing .board-frame {
+    --cell: min(calc((100dvh - 232px) / var(--board-span-h)), calc((100vw - 530px - var(--side-reserve)) / var(--board-span-w)), 120px);
+  }
+  #game.reviewing .side-right { width: 272px; max-height: calc(100dvh - 212px); }
+  /* The side column stretches to the grid, and the move list inside it is flex:1 with no
+     max-height — which is circular once a 60-move game is loaded at once: the list grows,
+     the row grows with it, and the board gets pushed off the screen. Bounding the column to
+     the viewport gives the flex child something definite to divide, so the list scrolls. */
+  .side-right {
+    grid-area: moves; align-self: stretch; width: 230px;
+    max-height: calc(100dvh - 150px);
+    min-height: 0;
+  }
+  .review { flex: 0 0 auto; }
+  .moves { flex: 1 1 auto; min-height: 120px; max-height: none; }
 
   /* rails turn into tall side cards */
   .rail {
@@ -1201,3 +1571,1101 @@ body::after {
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pop { from { opacity: 0; transform: scale(.95) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+/* ============================================================
+   Engine analysis — eval bar, best-move hint, move verdicts
+   ============================================================ */
+
+/* the bar stands beside the board, inside the same panel, and is always drawn from the
+   viewer's own side: the fill grows from the bottom as the near player's chances grow */
+.board-wrap { display: flex; align-items: stretch; gap: 10px; }
+.evalbar { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 24px; flex: 0 0 auto; }
+.evalbar[hidden] { display: none; }
+.evalbar-track {
+  position: relative;
+  flex: 1 1 auto;
+  width: 10px;
+  border-radius: 999px;
+  background: var(--opp);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.evalbar-fill {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 50%;
+  background: var(--me);
+  transition: height .4s var(--ease);
+}
+/* a proven win snaps the bar instead of easing it, so "decided" reads differently from "ahead" */
+.evalbar.proven .evalbar-fill { transition: height .2s var(--ease); }
+.evalbar-num {
+  font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  color: var(--muted); font-variant-numeric: tabular-nums;
+  min-height: 13px;
+}
+
+/* Verdict palette — one walk from green through parchment to clay, in the same chalky
+   register as the rest of the page. Best shares the page's green exactly, so "Path agrees"
+   and "Path's move" are unmistakably the same idea. */
+:root {
+  --v-brilliant: #5fb6a0;
+  --v-best:      #7fb069;
+  --v-excellent: #94b36a;
+  --v-good:      #93a088;
+  --v-book:      #a08a6a;
+  --v-inaccuracy:#d9b04f;
+  --v-mistake:   #d08a4e;
+  --v-blunder:   #cc5b45;
+  --v-miss:      #c1705e;
+}
+
+.analysis {
+  width: auto;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  overflow: hidden;
+}
+.analysis[hidden] { display: none; }
+.analysis-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px;
+  font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--faint);
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+.eng-depth { letter-spacing: .04em; text-transform: none; font-weight: 600; color: var(--faint); }
+.eng-body { padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 8px; }
+.eng-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.eng-label { font-size: 12px; color: var(--muted); }
+.eng-score { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.eng-best {
+  font: inherit; font-size: 12px; font-weight: 700;
+  padding: 4px 10px; border: 0; border-radius: var(--r-xs);
+  background: var(--surface-3); color: var(--good);
+  cursor: pointer; transition: background .15s var(--ease);
+}
+.eng-best:hover { background: var(--surface-2); }
+.eng-best:disabled { color: var(--faint); cursor: default; }
+
+.eng-verdict {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px;
+  padding: 8px 10px; border-radius: var(--r-xs);
+  background: var(--surface-2);
+  font-size: 13px; font-weight: 700;
+}
+.eng-verdict[hidden] { display: none; }
+.eng-verdict .vd-name { color: var(--vc, var(--text)); }
+.eng-verdict .vd-note { font-weight: 500; color: var(--muted); font-size: 12px; }
+
+.eng-acc { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.eng-acc[hidden] { display: none; }
+.eng-acc b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* the little square that marks a move's quality, in the move list */
+.mv-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; margin-left: 4px;
+  border-radius: 4px; flex: 0 0 auto;
+  background: var(--vc, var(--muted));
+  color: var(--on-accent); font-size: 9px; font-weight: 800; line-height: 1;
+}
+
+/* ---- a move drawn on the board: an arrow for a pawn, a ghost for a wall ---- */
+/* the layer sits inside .board so it inherits the 180° flip for the far seat */
+.board { position: relative; }
+.board-arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 6;
+}
+/* Path's move is green wherever it is drawn — on the live board and in review — because
+   green means "correct" everywhere else on the page too. Flat stroke, no glow behind it. */
+.arrow line { stroke: var(--ac, var(--good)); }
+.arrow polygon { fill: var(--ac, var(--good)); }
+.arrow { opacity: .95; }
+.arrow.best { --ac: var(--good); }
+.arrow.played { --ac: var(--vc, var(--muted)); opacity: .96; }
+.arrow.faded { opacity: .38; }
+
+/* The verdict for the move just played, sitting on the move itself. It is a grid item on
+   the board, so it follows the squares when the board resizes; the translate then pulls it
+   onto the corner or the wall end it is marking, and --mark-spin turns the glyph back up
+   the right way when the board is flipped for the far seat. */
+.mv-mark {
+  z-index: 7;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 17px; height: 17px;
+  border-radius: 6px;
+  background: var(--vc, var(--muted));
+  color: var(--on-accent);
+  font-size: 10px; font-weight: 800; line-height: 1;
+  box-shadow: 0 0 0 2px var(--surface);
+  pointer-events: none;
+  white-space: nowrap;
+  --mark-x: 0%; --mark-y: 0%; --mark-spin: rotate(0deg);
+  transform: translate(var(--mark-x), var(--mark-y)) var(--mark-spin);
+}
+.mv-mark.at-start  { justify-self: start;  --mark-x: -50%; }
+.mv-mark.at-end    { justify-self: end;    --mark-x: 50%; }
+.mv-mark.at-centre { justify-self: center; }
+.mv-mark.at-top    { align-self: start;    --mark-y: -50%; }
+.mv-mark.at-middle { align-self: center; }
+
+.hint-wall {
+  z-index: 5;
+  border-radius: 3px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--ac, var(--good)) 42%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--ac, var(--good));
+}
+.hint-wall.best { --ac: var(--good); }
+.hint-wall.played { --ac: var(--vc, var(--muted)); }
+.hint-wall.faded { opacity: .45; }
+
+/* a ring on a cell — used by review to mark the square you guessed */
+.cell.engine-best::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: max(2px, calc(var(--cell) * 0.047)) dashed var(--good);
+  transform: scale(0.78);
+  opacity: .95;
+  pointer-events: none;
+}
+
+.eng-brand {
+  color: var(--good);
+  letter-spacing: .18em;
+}
+
+/* Wide and landscape: the modifiers stop being a dropdown under the settings and become
+   a panel beside them. There is room sideways and none downwards, and a modified game is
+   exactly when you want to see every switch at once. Portrait and phones keep the
+   dropdown — stacking is the only thing that fits there. */
+@media (min-width: 900px) and (orientation: landscape) {
+  /* A grid rather than a row of flex items, because a grid column can be animated from
+     nothing to its full width and a flex-direction cannot: switching direction is what made
+     the page jump when the modifiers closed. */
+  .settings-host:has(.mods) {
+    display: grid;
+    grid-template-columns: minmax(0, 356px) 0fr;
+    justify-content: center;
+    align-items: start;
+    gap: 0;
+    transition: grid-template-columns .28s var(--ease), gap .28s var(--ease);
+  }
+  .settings-host:has(.mods:not([hidden])) {
+    grid-template-columns: minmax(0, 356px) minmax(0, 430px);
+    gap: 26px;
+  }
+  .settings-host:has(.mods) .set-core { width: auto; }
+  .settings-host:has(.mods) .mods { max-width: 430px; min-width: 0; }
+  /* the summary is a heading here, not a control */
+  .settings-host:has(.mods) .mods-summary { cursor: default; }
+  .settings-host:has(.mods) .mods-summary::after { content: ""; }
+  /* and the container has to make room for the second column, over the same time */
+  .setup-panel, .overlay-card, .tcard { transition: width .28s var(--ease); }
+  .setup-panel:has(.mods:not([hidden])) { width: min(900px, 100%); }
+  .overlay-card:has(.mods:not([hidden])) { width: min(880px, 100%); }
+  .tcard:has(.mods:not([hidden])) { width: min(880px, 100%); }
+  @media (prefers-reduced-motion: reduce) {
+    .settings-host:has(.mods), .setup-panel, .overlay-card, .tcard { transition: none; }
+  }
+}
+
+/* the action rail, when it is riding in the hud on a narrow screen */
+.hud #match-actions { margin-left: auto; gap: 6px; flex: 0 0 auto; }
+.hud #match-actions .icon-btn { width: 34px; height: 34px; }
+.hud:has(#match-actions) .status { text-align: left; padding-left: 4px; }
+
+@media (max-width: 720px) {
+  .evalbar { width: 18px; }
+  .evalbar-track { width: 8px; }
+}
+
+/* ============================================================
+   Game review
+   ============================================================ */
+
+.review {
+  width: auto;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  overflow: hidden;
+}
+.review[hidden] { display: none; }
+.rv-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+
+/* win probability across the whole game — also a scrubber */
+.rv-graph {
+  display: block;
+  width: 100%;
+  height: 76px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  cursor: crosshair;
+}
+
+.rv-verdict {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px;
+  padding: 9px 11px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--vc, var(--muted));
+  font-size: 13px; font-weight: 700;
+}
+.rv-verdict[hidden] { display: none; }
+.rv-verdict .vd-name { color: var(--vc, var(--text)); }
+.rv-verdict .vd-note { font-weight: 500; color: var(--muted); font-size: 12px; }
+
+.rv-acc { display: flex; gap: 8px; }
+.rv-acc[hidden] { display: none; }
+.rv-acc-item {
+  flex: 1 1 0;
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  font-size: 12px; color: var(--muted);
+  min-width: 0;
+}
+.rv-acc-item i { width: 7px; height: 7px; border-radius: 50%; background: var(--opp); flex: 0 0 auto; }
+.rv-acc-item.me i { background: var(--me); }
+.rv-acc-item b { margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; }
+
+.rv-tools { display: flex; gap: 8px; }
+.rv-toggle {
+  flex: 1 1 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px 10px;
+  border: 0; border-radius: var(--r-xs);
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  transition: background .15s var(--ease), color .15s var(--ease);
+}
+.rv-toggle .ic { display: inline-flex; width: 15px; height: 15px; }
+.rv-toggle .ic svg { width: 100%; height: 100%; }
+.rv-toggle:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
+.rv-toggle.on { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.rv-toggle:disabled { opacity: .45; cursor: default; }
+
+/* move navigation under the board */
+.rv-nav {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.rv-nav[hidden] { display: none; }
+.rv-count {
+  min-width: 72px; text-align: center;
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.rv-nav .icon-btn:disabled { opacity: .3; cursor: default; }
+
+/* icon buttons hold SVGs now, not glyphs */
+.icon-btn svg { width: 17px; height: 17px; display: block; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; }
+
+/* move list entries become a timeline you can scrub */
+/* A history row and its export control sit side by side: the row is a button, so the
+   export cannot be nested inside it. The wrapper carries the row's shape and the row keeps
+   its own hover, so the two still read as one thing. */
+.history-item { display: flex; align-items: stretch; gap: 4px; }
+.history-item > .history-row { flex: 1 1 auto; min-width: 0; }
+.h-export {
+  flex: 0 0 auto; width: 38px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line-soft); border-radius: var(--r-xs);
+  background: var(--surface); color: var(--muted); cursor: pointer;
+}
+.h-export svg { width: 17px; height: 17px; }
+.h-export:hover { background: var(--surface-2); color: var(--ink); border-color: var(--line); }
+.history-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+.mv-cell.jump { cursor: pointer; border-radius: var(--r-xs); }
+.mv-cell.jump:hover { background: var(--surface-2); }
+.mv-cell.current { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+
+.btn.ghost { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.btn.ghost:hover { color: var(--text); background: var(--surface-2); }
+
+@media (max-width: 720px) {
+  .rv-tools { flex-direction: column; }
+  .rv-graph { height: 62px; }
+}
+
+/* ============================================================
+   Game history
+   ============================================================ */
+
+.history-panel { width: min(640px, 100%); }
+.history-list { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; max-height: 60vh; overflow-y: auto; }
+.history-empty { color: var(--faint); font-size: 13px; text-align: center; padding: 22px 0; margin: 0; }
+
+.history-row {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%;
+  padding: 11px 13px;
+  border: 0; border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit; text-align: left;
+  cursor: pointer;
+  transition: background .15s var(--ease);
+}
+.history-row:hover { background: var(--surface-3); }
+.h-res {
+  flex: 0 0 auto;
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  border-radius: var(--r-xs);
+  font-size: 11px; font-weight: 800;
+  background: var(--surface-3); color: var(--muted);
+}
+.h-res.win { background: color-mix(in srgb, var(--v-best) 24%, transparent); color: var(--v-best); }
+.h-res.loss { background: color-mix(in srgb, var(--danger) 22%, transparent); color: var(--danger); }
+.h-mid { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.h-who { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h-meta { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h-when { flex: 0 0 auto; font-size: 11px; color: var(--faint); }
+
+.danger-link { color: var(--danger); }
+
+@media (max-width: 560px) {
+  .h-when { display: none; }
+}
+
+/* space the board has to give back when the eval bar or the move scrubber are on screen.
+   The scrubber is the same bar in a live game as in review, so it costs the same either way. */
+#game.has-eval .board-frame { --side-reserve: 46px; }
+#game.reviewing .board-frame,
+#game.scrubbing .board-frame { --vert-reserve: 322px; }
+/* the rank strip and the board panel's own padding used to be paid for here, with a bigger
+   reserve on phones; --board-chrome now hands them back on every screen, so the bar only
+   has to buy its own width. */
+
+/* ============================================================
+   Menu — the board IS the menu
+   ------------------------------------------------------------
+   Not a list of buttons over a picture of a board: a real one. The grid uses the
+   same cell/gap tracks the game does, every mode is a tile standing on cells, and
+   the walls sit in the gaps between them exactly where a played wall would. JS does
+   the placement from each tile's data-at="row,col,rowSpan,colSpan".
+   ============================================================ */
+
+#menu {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(18px, 3.4vh, 30px);
+  padding: 28px 20px 40px;
+  text-align: center;
+}
+
+.menu-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 920px;
+}
+.menu-tools { display: flex; align-items: flex-end; gap: 16px; }
+.menu-bar .name-field { align-items: flex-end; margin-top: 0; width: min(190px, 46vw); }
+.menu-bar .name-field .text-input { text-align: right; }
+
+/* three states, and they look like what they mean: an empty cell, a half-inked one,
+   a filled one. No sun, no moon. */
+.theme-seg { display: flex; gap: 3px; }
+.th-btn {
+  display: grid; place-items: center;
+  width: 30px; height: 30px;
+  padding: 0; border: 0;
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--faint);
+  cursor: pointer;
+  transition: background .15s var(--ease), color .15s var(--ease), box-shadow .15s var(--ease);
+}
+.th-btn svg { width: 15px; height: 15px; display: block; }
+.th-btn:hover { color: var(--muted); background: var(--surface-2); }
+.th-btn.on { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
+
+/* ---------- the board ---------- */
+.board-menu {
+  --cell: clamp(50px, 7.4vw, 88px);
+  --gap: calc(var(--cell) * 0.16);
+  display: grid;
+  gap: 0;
+  width: max-content;
+  max-width: 100%;
+  padding: var(--gap);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  animation: rise .5s var(--ease) both;
+}
+/* the empty squares the tiles stand on */
+.bm-cell { background: var(--surface-3); border-radius: var(--r-xs); }
+/* walls, in the gaps, coloured by whose they are */
+.bm-wall { border-radius: var(--r-wall); background: var(--pc, var(--muted)); z-index: 1; }
+.bm-wall.mine { --pc: var(--me); }
+.bm-wall.opp { --pc: var(--opp); }
+
+.bm-tile {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 10px 13px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background .15s var(--ease), box-shadow .15s var(--ease);
+}
+/* a hovered tile lights its leading edge, the way a goal row does */
+.bm-tile:not(:disabled):hover {
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line), inset 4px 0 0 var(--accent);
+}
+.bm-tile:not(:disabled):active { box-shadow: inset 0 0 0 1px var(--accent), inset 4px 0 0 var(--accent); }
+.bm-ic { display: block; color: var(--muted); margin-bottom: 4px; }
+.bm-ic svg { width: 20px; height: 20px; display: block; }
+.bm-name {
+  font-size: 14px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.15;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.bm-sub { font-size: 11.5px; line-height: 1.3; color: var(--muted); }
+/* The meta line is taken out of the flow. In the flow it made four stacked lines out of a
+   tile one cell tall, and `overflow: hidden` then cut the name off the top — which is what
+   "the game history text is hidden behind the n games line" was. There is always room to
+   the right on a five-cell tile. */
+.bm-meta {
+  position: absolute;
+  right: 13px; bottom: 11px;
+  margin: 0;
+  font-size: 11px; font-weight: 700; color: var(--faint);
+}
+.bm-meta:empty { display: none; }
+.bm-meta.win { color: var(--good); }
+.bm-meta.loss { color: var(--danger); }
+
+/* the one thing you came here to do */
+.bm-hero { background: var(--accent); box-shadow: none; color: var(--on-accent); gap: 3px; }
+.bm-hero .bm-ic { color: var(--on-accent); opacity: .8; margin-bottom: 10px; }
+.bm-hero .bm-ic svg { width: 30px; height: 30px; }
+.bm-hero .bm-name { font-family: var(--font-display); font-size: 24px; font-weight: 800; letter-spacing: -0.035em; }
+.bm-hero .bm-sub { color: var(--on-accent); opacity: .72; font-size: 12.5px; }
+.bm-hero:not(:disabled):hover { background: var(--accent-deep); box-shadow: none; }
+.bm-hero:not(:disabled):active { box-shadow: none; }
+
+/* Nothing is standing on these squares yet, so they are drawn as bare board — same fill as
+   an empty cell, no edge. A mode that doesn't exist looks like a space waiting for one. */
+.bm-soon { cursor: default; background: var(--surface-3); box-shadow: none; }
+.bm-soon .bm-ic { color: var(--line); }
+.bm-soon .bm-name { font-weight: 600; color: var(--muted); }
+.bm-soon .bm-sub { color: var(--faint); }
+.bm-soon .soon { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.bm-tile .soon { position: absolute; top: 9px; right: 10px; }
+
+/* quick join is a tile you type into rather than press */
+.bm-join {
+  cursor: default;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 3px 10px;
+}
+.bm-join:hover { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line-soft); }
+.bm-join .bm-ic { grid-row: 1 / 3; margin: 0; }
+.bm-join .bm-name { grid-column: 2; }
+.bm-joinrow { grid-column: 2; display: flex; gap: 5px; }
+.bm-join .qj-code { flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px; font-size: 14px; letter-spacing: .14em; }
+.bm-join .qj-go { flex: 0 0 auto; height: 32px; padding: 0 12px; font-size: 12.5px; }
+
+.menu-foot { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 58ch; }
+.menu-tagline { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); text-wrap: pretty; }
+
+/* Narrow: a board of nine columns stops being readable long before the screen runs out,
+   so below this the tiles become a plain stack and the cells and walls step aside. */
+@media (max-width: 820px) {
+  .board-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+    max-width: 460px;
+    padding: 8px;
+  }
+  .bm-cell, .bm-wall { display: none; }
+  .bm-tile { min-height: 60px; padding: 11px 14px; }
+  .bm-tile[data-at] { grid-row: auto !important; grid-column: auto !important; }
+  .bm-ic { position: absolute; top: 12px; right: 12px; margin: 0; }
+  /* stacked, the tile's icon corner is where the Join button lands, so it steps aside */
+  .bm-join .bm-ic { display: none; }
+  .bm-join { grid-template-columns: minmax(0, 1fr); }
+  .bm-hero .bm-ic { top: 14px; right: 14px; }
+  .bm-hero .bm-name { font-size: 21px; }
+  .bm-tile .soon { top: auto; bottom: 11px; right: 12px; }
+  .menu-bar { justify-content: center; }
+  .menu-bar .name-field { align-items: center; }
+  .menu-bar .name-field .text-input { text-align: center; }
+}
+
+/* ---------- Standard vs Custom: the split every setup surface leads with ---------- */
+.set-core { display: flex; flex-direction: column; align-items: center; gap: 11px; width: 100%; }
+.variant-tabs { width: 100%; max-width: 360px; }
+.variant-tabs .seg-btn { flex: 1 1 0; }
+.variant-note { max-width: 360px; font-size: 11.5px; line-height: 1.45; color: var(--faint); text-align: center; }
+.mods[hidden] { display: none; }   /* the .mods rule would otherwise beat the attribute */
+
+/* ---------- setting up a friend room ---------- */
+.make-block { display: flex; flex-direction: column; align-items: center; gap: 13px; width: 100%; }
+.make-title { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--faint); }
+.make-lead { margin: -4px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.make-summary { font-size: 12px; font-weight: 600; color: var(--accent); }
+
+/* quick join's code box and button, now that the tile itself is a board square */
+.qj-code::placeholder { letter-spacing: .1em; }
+
+/* ---------- what am I joining? ---------- */
+.jp-card { text-align: center; }
+.jp-card h2 { margin-bottom: 14px; }
+.jp-vs { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.jp-side { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.jp-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.jp-dot.me { background: var(--me); box-shadow: 0 0 0 4px var(--me-soft); }
+.jp-dot.opp { background: var(--opp); box-shadow: 0 0 0 4px var(--opp-soft); }
+.jp-who { font-size: 15px; font-weight: 700; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jp-x { font-size: 10.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--faint); }
+.jp-tag {
+  display: inline-block;   /* the card centres its text, so the pill hugs its label */
+  margin: 13px auto 4px;
+  padding: 4px 10px;
+  border-radius: var(--r-xs);
+  font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  background: var(--surface-3); color: var(--muted);
+}
+/* the exception gets the ink, not the norm: a standard game is stamped quietly, a
+   modified one in brass, so the thing worth noticing is the thing that stands out */
+.jp-tag.custom { background: var(--accent-soft); color: var(--accent); }
+.jp-card .setup-block { align-items: center; }
+
+/* ============================================================
+   The machine voice
+   ------------------------------------------------------------
+   Clocks, room codes, move notation, evaluations, accuracies: everything the
+   game measures rather than says. Space Mono is what Space Grotesk was drawn
+   from, so the two sit together without being introduced.
+   ============================================================ */
+.room-chip-code,
+.rail-clock,
+.code-input,
+.qj-code,
+.eng-score,
+.evalbar-num,
+.mv-cell,
+.mv-num,
+.t-score,
+.version,
+.eng-acc b,
+.rv-acc-item b,
+.set-value,
+.num-input {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.mv-cell { font-size: 12.5px; letter-spacing: -0.01em; }
+.rail-clock { letter-spacing: -0.02em; }
+
+/* ============================================================
+   Appearance — pawns and board
+   ------------------------------------------------------------
+   Both axes have to stay clear of the goal rows, which carry their own fill in
+   the owner's colour: a board style that painted over those would take away the
+   one thing telling you which end you are running to. Hence :not([class*="goal"])
+   on every board rule — goal squares keep their own look under all four.
+   ============================================================ */
+
+/* ---------- pawns ---------- */
+/* token (default) is a solid disc with a darker ring pressed into it */
+:root[data-pawn="solid"] .pawn { box-shadow: none; }
+:root[data-pawn="ring"] .pawn {
+  background: transparent;
+  box-shadow: inset 0 0 0 max(3px, calc(var(--cell) * 0.1)) var(--pc);
+}
+:root[data-pawn="block"] .pawn {
+  border-radius: var(--r-sm);
+  width: 62%;
+  height: 62%;
+}
+/* the drag ghost and the menu board have to agree with whatever is on the board */
+:root[data-pawn="block"] .pawn-ghost .pawn { border-radius: var(--r-sm); }
+
+/* ---------- board ---------- */
+:root[data-board="checker"] .cell[data-p="1"]:not([class*="goal"]):not(.hole) {
+  background: color-mix(in srgb, var(--text) 14%, var(--surface-3));
+}
+/* one continuous surface: the squares stop being separate objects */
+:root[data-board="flat"] .cell:not([class*="goal"]):not(.hole) {
+  background: var(--surface-2);
+  border-radius: 0;
+}
+:root[data-board="flat"] .board-wrap { background: var(--surface-2); }
+/* nothing but the lines and what is standing on them */
+:root[data-board="bare"] .cell:not([class*="goal"]):not(.hole) {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+:root[data-board="bare"] .board-wrap { background: transparent; box-shadow: none; padding: 0; }
+
+/* ============================================================
+   Appearance screen
+   ------------------------------------------------------------
+   Every swatch is drawn with the same variables the real thing uses, so a
+   preview cannot drift from what it is previewing. The palette chips are the
+   exception: they have to show a palette you are NOT currently using, so they
+   set their three colours literally — and those are the only literal colours
+   left in the stylesheet.
+   ============================================================ */
+.look-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 12px;
+  border: 0; border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--muted);
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+  transition: background .15s var(--ease), color .15s var(--ease), box-shadow .15s var(--ease);
+}
+.look-btn svg { width: 15px; height: 15px; }
+.look-btn:hover { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+
+.look-wrap {
+  margin: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 420px);
+  gap: 32px;
+  align-items: start;
+  width: min(820px, 100%);
+}
+.look-preview { display: flex; flex-direction: column; align-items: center; gap: 14px; position: sticky; top: 24px; }
+.look-board-frame { --cell: clamp(26px, 5.4vw, 46px); --gap: calc(var(--cell) * 0.22); display: block; }
+.look-board-frame .board { margin: 0 auto; }
+.look-preview .board { padding: 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft); border-radius: var(--r-lg); }
+:root[data-board="bare"] .look-preview .board { background: transparent; box-shadow: none; }
+
+.look-sets { display: flex; flex-direction: column; gap: 20px; }
+.look-row { display: flex; flex-direction: column; gap: 9px; }
+.look-head {
+  margin: 0;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--faint);
+}
+.look-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.look-opt {
+  flex: 1 1 88px;
+  max-width: 124px;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  padding: 11px 8px;
+  border: 0; border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  transition: background .15s var(--ease), box-shadow .15s var(--ease), color .15s var(--ease);
+}
+.look-opt:hover { background: var(--surface-2); color: var(--text); }
+.look-opt.on { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 2px var(--accent); }
+.look-label { font-size: 11.5px; font-weight: 600; }
+
+.look-sw { display: block; width: 34px; height: 22px; }
+.look-mode svg, .look-snd svg { width: 22px; height: 22px; display: block; margin: 0 auto; color: var(--muted); }
+.look-opt.on .look-mode svg, .look-opt.on .look-snd svg { color: var(--accent); }
+
+/* palette chips: ground, you, your opponent — the only literal colours in the file */
+.look-sw[data-pal] { display: flex; align-items: stretch; gap: 0; border-radius: var(--r-xs); overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+.look-sw[data-pal] i { flex: 1 1 0; }
+.look-sw[data-pal="press"] .sw-bg { background: #eee7dd; } .look-sw[data-pal="press"] .sw-me { background: #b8401f; } .look-sw[data-pal="press"] .sw-opp { background: #23467e; }
+.look-sw[data-pal="dusk"] .sw-bg { background: #ece5da; } .look-sw[data-pal="dusk"] .sw-me { background: #8f5405; } .look-sw[data-pal="dusk"] .sw-opp { background: #57338f; }
+.look-sw[data-pal="signal"] .sw-bg { background: #ece2e8; } .look-sw[data-pal="signal"] .sw-me { background: #a3176b; } .look-sw[data-pal="signal"] .sw-opp { background: #0b5f72; }
+.look-sw[data-pal="moss"] .sw-bg { background: #e8e8da; } .look-sw[data-pal="moss"] .sw-me { background: #9c4a1f; } .look-sw[data-pal="moss"] .sw-opp { background: #15616d; }
+:root[data-theme="dark"] .look-sw[data-pal="press"] .sw-bg { background: #11151c; }
+:root[data-theme="dark"] .look-sw[data-pal="dusk"] .sw-bg { background: #15121c; }
+:root[data-theme="dark"] .look-sw[data-pal="signal"] .sw-bg { background: #0f161b; }
+:root[data-theme="dark"] .look-sw[data-pal="moss"] .sw-bg { background: #101410; }
+
+.look-shape i { display: block; width: 22px; height: 22px; margin: 0 auto; background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--line); }
+/* Each swatch has to show what the pawn will actually look like, which means two things.
+   First, every modifier is scoped the same way as the base — `.look-pawn .pw` is two classes
+   and a bare `.pw-ring` is one, so the base won every property they had in common and Ring
+   silently drew a filled disc while Block drew a circle. Second, the thicknesses are ratios
+   of the swatch, matched to the ratios the real pawn has on a board: an inset ring is "this
+   fraction of the disc", not "four pixels", and four pixels on a 22px swatch is more than
+   twice the ring a pawn actually carries. */
+.look-pawn .pw { display: block; width: 22px; height: 22px; margin: 0 auto; background: var(--me); border-radius: 50%; }
+.look-pawn .pw-token { box-shadow: inset 0 0 0 1.8px color-mix(in srgb, var(--me) 52%, var(--shade)); }
+.look-pawn .pw-solid { box-shadow: none; }
+.look-pawn .pw-ring { background: transparent; box-shadow: inset 0 0 0 3.2px var(--me); }
+.look-pawn .pw-block {
+  width: 20px; height: 20px;
+  /* the real block pawn is about twice this across, so half the radius keeps the same
+     roundness, and it follows the square/round corner setting exactly as the pawn does */
+  border-radius: calc(var(--r-sm) / 2);
+  box-shadow: inset 0 0 0 1.8px color-mix(in srgb, var(--me) 52%, var(--shade));
+}
+
+.look-board { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 24px; height: 24px; margin: 0 auto; }
+.look-board i { display: block; border-radius: 1px; background: var(--surface-3); }
+.bd-checker i:nth-child(2), .bd-checker i:nth-child(3) { background: color-mix(in srgb, var(--text) 26%, var(--surface-3)); }
+.bd-flat { gap: 0; } .bd-flat i { background: var(--surface-3); border-radius: 0; }
+.bd-bare i { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+
+@media (max-width: 860px) {
+  .look-wrap { grid-template-columns: minmax(0, 440px); justify-content: center; }
+  .look-preview { position: static; }
+}
+
+/* ---------- reading an earlier position mid-game ---------- */
+/* The bar is the review's scrubber — it carries .rv-nav and takes all of its shape from
+   there, so the two cannot drift apart. Nothing is left to say about it here. */
+.icon-btn.on { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+/* the board says plainly that what you are looking at is not the live game */
+.status.rewound { color: var(--accent); font-weight: 600; }
+#game.rewound-view .board-wrap { box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* ---------- lessons ---------- */
+/* The list borrows the history list's shape, because it is the same kind of thing: a column of
+   things you can open. The panel borrows the analysis panel's, for the same reason. */
+.lesson-group {
+  /* The group headings carry the spacing now that the paragraphs under them are gone. */
+  margin: 20px 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.lesson-groupnote { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+.lesson-list { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
+.lesson-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 14px;
+  text-align: left;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  cursor: pointer;
+  transition: background .18s, box-shadow .18s, transform .12s;
+}
+.lesson-card:hover { box-shadow: inset 0 0 0 1px var(--line); }
+.lesson-card:active { transform: translateY(1px); }
+.lesson-card-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+.lesson-card-note { font-size: 12px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
+/* A finished lesson keeps its place and says so quietly, rather than disappearing: you may
+   well want to walk a line again. */
+.lesson-card.done .lesson-card-name::after {
+  content: "done";
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.lesson { width: min(560px, 100%); border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft); }
+.lesson[hidden] { display: none; }
+.lesson-title { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+.lesson-ask { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+.lesson-say { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
+.lesson-say.good { color: var(--good, #2f7d4f); }
+.lesson-say.bad { color: var(--danger); }
+.lesson-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+.lesson-actions .btn { flex: 1 1 auto; }
+
+/* ---- setting a position up on the analysis board ---- */
+/* A wall you can take off again says so under the pointer; a pawn you have picked up by tapping
+   has to look picked up, since nothing else on the board has changed. */
+/* Every empty square is a target while setting up, which is the point -- but drawing all 79 of
+   them as move dots turns the board into a field of pieces. They wait until a pawn is in hand. */
+.board.setup .cell.movable::after { content: none; }
+.board.setup.su-hold .cell.movable::after { content: ""; }
+.board.setup.su-hold-opp .cell.movable::after {
+  background: var(--opp);
+  box-shadow: 0 0 0 calc(var(--cell) * 0.13125) color-mix(in srgb, var(--opp) 15%, transparent);
+}
+.wall.liftable { cursor: pointer; }
+.wall.liftable:hover { outline: 2px solid var(--danger); outline-offset: 1px; }
+.pawn.picked {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  animation: pulse 1.1s var(--ease) infinite;
+}
+@keyframes pulse { 0%, 100% { outline-color: var(--accent); } 50% { outline-color: transparent; } }
+
+.setup-say { margin: 0 0 12px; font-size: 12px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+.setup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.setup-label { font-size: 11.5px; font-weight: 600; color: var(--faint); flex: 0 0 auto; }
+/* Four seats' worth of pills do not fit a 230px column on one line, and a clipped "Right" is
+   worse than a second row. */
+.setup-seg { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; min-width: 0; }
+.setup-pill {
+  border: 0; cursor: pointer; font: inherit;
+  padding: 5px 10px;
+  border-radius: var(--r-sm, 8px);
+  font-size: 11.5px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--muted);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  transition: background .18s var(--ease), color .18s var(--ease), box-shadow .18s var(--ease);
+}
+.setup-pill:hover { color: var(--text); }
+/* --pc is the seat's own colour, set by the .mine/.opp/.p0-.p3 classes every other coloured
+   piece on the page uses, so four seats need no extra rules here. */
+.setup-pill.on { background: var(--pc, var(--accent)); color: var(--on-accent); box-shadow: none; }
+.setup-hands { display: flex; flex-direction: column; gap: 6px; }
+.setup-hand { display: flex; align-items: center; gap: 7px; }
+.setup-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; background: var(--pc, var(--muted)); }
+.setup-num { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
+.setup-step {
+  border: 0; cursor: pointer; font: inherit;
+  width: 22px; height: 22px; line-height: 1;
+  border-radius: var(--r-sm, 7px);
+  color: var(--muted);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.setup-step:hover { color: var(--text); background: var(--surface-3, var(--surface-2)); }
+.setup-actions { display: flex; gap: 6px; margin-top: 14px; }
+.setup-actions .btn { flex: 1 1 auto; }
+
+/* The lesson's move track. It lives in the gap between the two wall boxes, which only exists
+   once the rails have turned into tall side cards — so it is display:none until then rather
+   than squeezing itself between the opponent's rail and the board on a phone. */
+.lesson-track { display: none; }
+.lt-head {
+  font-size: 10px; font-weight: 800; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--faint);
+  margin-bottom: 9px;
+}
+.lt-grid {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  gap: 4px 9px;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.lt-lab { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); }
+.lt-n { font-size: 11px; color: var(--faint); }
+.lt-mv { font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; }
+/* Prefixed, all three of them: a global `.soon` badge is already defined further up and it is
+   position:absolute, which quietly lifted every unplayed move out of the grid. */
+.lt-mv.lt-done { color: var(--text); }
+.lt-mv.lt-now { color: var(--accent); }
+.lt-mv.lt-soon { color: var(--faint); }
+
+/* The route an explanation is about, drawn with the same weight, head and opacity as the
+   best-move arrow: one kind of line on this board, and only the colour says what it means.
+   Red when it is the opponent's way home being cut — the sentence says "their route" and the
+   board shows which one — green when it is your own being run down. */
+.route polyline { fill: none; stroke: var(--rc, var(--muted)); }
+.route polygon { fill: var(--rc, var(--muted)); }
+.route { opacity: .95; }
+.route.threat { --rc: var(--danger); }
+/* Your own route is the one case that shares a colour with something else on the board: the
+   best-move arrow is green too, and when the recommendation is the first step of that route the
+   two lie on top of each other. Full weight, one step back, so the recommendation stays first. */
+.route.own { --rc: var(--good); opacity: .7; }
+
+/* What the move is worth over the next one. Quieter than the explanation above it: it is the
+   footnote that answers "why not the one I was going to play", not the point. */
+.eng-alt {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--faint);
+  text-wrap: pretty;
+}
+
+.eng-why {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+.eng-why[hidden] { display: none; }
+
+/* Wide and landscape: the lessons stop being a 340px column with a thousand pixels of empty
+   board either side. A phone in portrait has exactly one column's worth of room and keeps it;
+   a desktop screen is landscape almost by definition, and a list of ten cards read one at a
+   time down a narrow strip is a list that has to be scrolled for no reason.
+   The panel widens and each list becomes a grid that fills the width with whole cards, so the
+   number of columns follows the window instead of being decided here. */
+@media (min-width: 900px) and (orientation: landscape) {
+  .lessons-panel {
+    width: min(1040px, 92vw);
+    align-items: stretch;      /* the panel centres its children; the lists want the full width */
+    text-align: left;
+  }
+  .lessons-panel .panel-title { text-align: center; }
+  .lesson-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 8px;
+  }
+  /* Cards in a grid row are stretched to the tallest, so the notes no longer set the height
+     and the names line up across the row. */
+  .lesson-card { height: 100%; }
+  .lessons-panel .history-actions { justify-content: flex-start; }
+}
+
+
+/* ---------- The room code, on the board ----------
+   A friend game now starts at the board rather than at a screen with a code on it, so the code
+   has to travel with the game: this sits in the HUD for as long as the room exists, for the
+   host, the guest and anyone watching. On a phone the HUD is already tight, so the label goes
+   and the chip keeps only what cannot be guessed — the code and the button that copies it. */
+.room-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px 5px 10px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 12.5px;
+  line-height: 1;
+}
+.room-chip[hidden] { display: none; }
+.room-chip-label { color: var(--muted); letter-spacing: .04em; }
+.room-chip-code {
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-indent: .12em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.room-chip-copy {
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11.5px;
+}
+.room-chip-copy:hover { color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+.rc-glyph { display: none; }
+.room-chip-specs { color: var(--muted); font-size: 11.5px; }
+.room-chip-specs[hidden] { display: none; }
+
+/* ---------- Watching ---------- */
+.join-note { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--faint); }
+.chat-msg.watcher .chat-name { color: var(--muted); font-style: italic; }
+.chat-msg.watcher .chat-name::after { content: " (watching)"; font-weight: 400; font-size: 11px; }
+
+.emote-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 9px 13px 0;
+}
+.emote-bar[hidden] { display: none; }
+.emote-btn {
+  border: none;
+  cursor: pointer;
+  padding: 5px 9px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 16px;
+  line-height: 1.1;
+}
+.emote-btn:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* Reactions drift up over the board and take themselves away again. They must never be in the
+   way of a move, hence pointer-events: none on the layer itself. */
+.emote-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.emote-pop {
+  position: absolute;
+  bottom: 8%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  animation: emote-rise 2.4s ease-out forwards;
+}
+.emote-glyph { font-size: 30px; line-height: 1; }
+.emote-who {
+  font-size: 10.5px;
+  color: var(--muted);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  border-radius: var(--r-sm);
+  padding: 1px 5px;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@keyframes emote-rise {
+  0%   { opacity: 0; transform: translateY(14px) scale(.8); }
+  14%  { opacity: 1; transform: translateY(0) scale(1); }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-58px) scale(.94); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .emote-pop { animation: emote-fade 2.4s linear forwards; }
+  @keyframes emote-fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+}
+
+@media (max-width: 560px) {
+  .room-chip { padding: 4px 5px 4px 7px; gap: 4px; }
+  .room-chip-label { display: none; }
+  /* the word costs more room than the HUD has on a phone; the button keeps its aria-label */
+  .room-chip-copy { padding: 4px 6px; font-size: 13px; }
+  .rc-word { display: none; }
+  .rc-glyph { display: inline; }
+  .room-chip-code { letter-spacing: .06em; text-indent: .06em; font-size: 12px; }
+}

@@ -5,10 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Detour — tactical race</title>
   <meta name="description" content="Detour is a fast 1v1 tactical race: reach the far side first while walling your opponent into the long way around." />
-  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <meta name="theme-color" content="#f4efe5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0b0e14" media="(prefers-color-scheme: dark)" />
+  <script>
+    // Inline and first, so the page is never painted in the wrong theme and then corrected.
+    try {
+      var L = JSON.parse(localStorage.getItem('detour_look') || '{}');
+      var d = document.documentElement.dataset;
+      if (L.theme === 'light' || L.theme === 'dark') d.theme = L.theme;
+      ['palette', 'shape', 'pawn', 'board'].forEach(function (k) { if (L[k]) d[k] = L[k]; });
+    } catch (e) {}
+  </script>
+  <meta property="og:title" content="Detour" />
+  <meta property="og:description" content="A fast 1v1 tactical race: reach the far side first while walling your opponent into the long way around." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -16,63 +31,225 @@
   <main id="app">
     <!-- Menu -->
     <section id="menu" class="screen is-active">
-      <div class="brand">
-        <img class="brand-mark" src="favicon.svg" alt="" width="44" height="44" />
-        <h1 class="brand-title">Detour</h1>
-      </div>
-
-      <div class="name-field">
-        <label for="player-name">Your name</label>
-        <input id="player-name" class="text-input" maxlength="16" autocomplete="off" spellcheck="false" />
-      </div>
-
-      <div class="menu-groups">
-        <div class="menu-group">
-          <h2 class="group-label">Local</h2>
-          <button class="game-card" data-mode="bot">
-            <span class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="2.5"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.1"/><circle cx="9" cy="13" r="1.1"/><circle cx="15" cy="13" r="1.1"/><path d="M2 12v3M22 12v3"/></svg>
-            </span>
-            <span class="card-text"><span class="card-name">vs Bot</span><span class="card-sub">Three difficulties</span></span>
-          </button>
-          <button class="game-card" data-mode="local">
-            <span class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.6"/><circle cx="16" cy="8" r="2.6"/><path d="M3.5 19c0-2.5 2-4.2 4.5-4.2S12.5 16.5 12.5 19M11.5 19c0-2.5 2-4.2 4.5-4.2s4.5 1.7 4.5 4.2"/></svg>
-            </span>
-            <span class="card-text"><span class="card-name">Freeplay</span><span class="card-sub">Pass-and-play 1v1</span></span>
-          </button>
-          <button class="game-card" data-mode="tournament">
-            <span class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4z"/><path d="M6 5H4v1a3 3 0 0 0 3 3M18 5h2v1a3 3 0 0 1-3 3"/><path d="M9.5 20h5M12 13v4"/></svg>
-            </span>
-            <span class="card-text"><span class="card-name">Tournament</span><span class="card-sub">Round-robin, pass-and-play</span></span>
+      <header class="menu-bar">
+        <div class="brand">
+          <!-- inline, not an <img>, so it follows the theme switch and not just the
+               system preference the standalone favicon.svg has to rely on -->
+          <svg class="brand-mark" viewBox="0 0 64 64" width="40" height="40" aria-hidden="true">
+            <rect x="2" y="2" width="60" height="60" rx="4" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+            <path d="M20 48 V38 H44 V21" fill="none" stroke="var(--me)" stroke-width="6" stroke-linecap="square"/>
+            <path d="M37 27 L44 19 L51 27" fill="none" stroke="var(--me)" stroke-width="6" stroke-linecap="square"/>
+            <circle cx="20" cy="48" r="5" fill="var(--me)"/>
+            <rect x="10" y="30" width="24" height="5" rx="1" fill="var(--opp)"/>
+          </svg>
+          <h1 class="brand-title">Detour</h1>
+        </div>
+        <div class="menu-tools">
+          <div class="name-field">
+            <label for="player-name">Your name</label>
+            <input id="player-name" class="text-input" maxlength="16" autocomplete="off" spellcheck="false" />
+          </div>
+          <button class="look-btn" id="look-btn" title="Appearance" aria-label="Appearance">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7.5" height="7.5"/><rect x="13" y="3.5" width="7.5" height="7.5" fill="currentColor" stroke="none"/><rect x="3.5" y="13" width="7.5" height="7.5" fill="currentColor" stroke="none"/><rect x="13" y="13" width="7.5" height="7.5"/></svg>
+            <span>Appearance</span>
           </button>
         </div>
+      </header>
 
-        <div class="menu-group">
-          <h2 class="group-label">Online</h2>
-          <button class="game-card" data-mode="friend">
-            <span class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5l5-5M10.5 6.5l1-1a3.5 3.5 0 0 1 5 5l-1 1M13.5 17.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></svg>
-            </span>
-            <span class="card-text"><span class="card-name">Play with a Friend</span><span class="card-sub">Share a room code</span></span>
-          </button>
-          <button class="game-card" data-mode="otour">
-            <span class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4z"/><path d="M6 5H4v1a3 3 0 0 0 3 3M18 5h2v1a3 3 0 0 1-3 3"/><path d="M9.5 20h5M12 13v4"/><circle cx="12" cy="9" r="1.2"/></svg>
-            </span>
-            <span class="card-text"><span class="card-name">Tournament</span><span class="card-sub">Host or join a room</span></span>
-          </button>
-          <button class="game-card" data-mode="random">
-            <span class="card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/><circle cx="15" cy="15" r="1.2"/></svg>
-            </span>
-            <span class="card-text"><span class="card-name">Random Match</span><span class="card-sub">Find any opponent</span></span>
-          </button>
-        </div>
+      <!-- The menu is the board: every mode stands on it, and the gaps between them
+           hold walls, exactly as they do in a game. JS paints the empty cells and the
+           walls behind these tiles from each one's data-at="row,col,rowSpan,colSpan". -->
+      <div class="board-menu" id="board-menu">
+        <button class="bm-tile bm-hero" data-mode="bot" data-at="1,1,2,4">
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="1"/><path d="M12 8V4.6"/><circle cx="12" cy="3.4" r="1.1"/><circle cx="9" cy="13" r="1.1"/><circle cx="15" cy="13" r="1.1"/><path d="M2 12v3M22 12v3"/></svg></span>
+          <span class="bm-name">Play vs Computer</span>
+          <span class="bm-sub">Easy, medium, or the Path engine</span>
+          
+        </button>
+        <button class="bm-tile" data-mode="local" data-at="1,5,1,5">
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.6"/><circle cx="16" cy="8" r="2.6"/><path d="M3.5 19c0-2.5 2-4.2 4.5-4.2S12.5 16.5 12.5 19M11.5 19c0-2.5 2-4.2 4.5-4.2s4.5 1.7 4.5 4.2"/></svg></span>
+          <span class="bm-name">Two players</span>
+          <span class="bm-sub">Pass-and-play on one screen</span>
+          
+        </button>
+        <button class="bm-tile" data-mode="tournament" data-at="2,5,1,5">
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4z"/><path d="M6 5H4v1a3 3 0 0 0 3 3M18 5h2v1a3 3 0 0 1-3 3"/><path d="M9.5 20h5M12 13v4"/></svg></span>
+          <span class="bm-name">Tournament</span>
+          <span class="bm-sub">Round-robin, pass-and-play</span>
+          
+        </button>
+        <button class="bm-tile" data-mode="friend" data-at="3,1,1,3">
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5l5-5M10.5 6.5l1-1a3.5 3.5 0 0 1 5 5l-1 1M13.5 17.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></svg></span>
+          <span class="bm-name">Play a friend</span>
+          <span class="bm-sub">Share a room code</span>
+          
+        </button>
+        <form class="bm-tile bm-join" id="quick-join" data-at="3,4,1,3" autocomplete="off">
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 9.5a4.5 4.5 0 1 1-4.2-4.5"/><path d="M13.2 10.8 20 17.6V21h-3.4v-2.2h-2.2v-2.2h-2.2"/></svg></span>
+          <span class="bm-name">Quick join</span>
+          <span class="bm-joinrow">
+            <input id="quick-code" class="code-input qj-code" placeholder="CODE" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code" />
+            <button class="btn qj-go" type="submit">Join</button>
+          </span>
+        </form>
+        <button class="bm-tile" data-mode="random" data-at="3,7,1,3">
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="1"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/><circle cx="15" cy="15" r="1.2"/></svg></span>
+          <span class="bm-name">Random match</span>
+          <span class="bm-sub">Find any opponent</span>
+          
+        </button>
+        <button class="bm-tile" data-mode="otour" data-at="4,1,1,4">
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3.5a4 4 0 0 1-8 0V4z"/><path d="M6 5H4v1a3 3 0 0 0 3 3M18 5h2v1a3 3 0 0 1-3 3"/><path d="M9.5 20h5M12 13v4"/><circle cx="12" cy="9" r="1.2"/></svg></span>
+          <span class="bm-name">Online tournament</span>
+          <span class="bm-sub">Host or join a room</span>
+          
+        </button>
+        <button class="bm-tile" data-mode="history" data-at="4,5,1,5">
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5"/><path d="M12 8v4.4l3 1.8"/></svg></span>
+          <span class="bm-name">Game history</span>
+          <span class="bm-sub">Replay and review with Path</span>
+          <span class="bm-meta" id="history-count"></span>
+        </button>
+        <button class="bm-tile bm-soon" data-mode="puzzles" data-at="5,1,1,2" disabled>
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h2.2a1.8 1.8 0 1 1 3.6 0H12V11a1.8 1.8 0 1 0 0 3.6V17H9.8a1.8 1.8 0 1 0-3.6 0H4V8.5z"/><path d="M12 8.5h3.2a1.8 1.8 0 1 1 0 3.6H20V17h-8"/></svg></span>
+          <span class="bm-name">Puzzles</span>
+          <span class="bm-sub">The only move that wins</span>
+          <span class="soon">Soon</span>
+        </button>
+        <button class="bm-tile bm-soon" data-mode="daily" data-at="5,3,1,2" disabled>
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="1"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><circle cx="12" cy="14.5" r="1.6"/></svg></span>
+          <span class="bm-name">Daily puzzle</span>
+          <span class="bm-sub">One a day</span>
+          <span class="soon">Soon</span>
+        </button>
+        <button class="bm-tile" data-mode="lessons" data-at="5,5,1,2">
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5 3 10l9 3.5L21 10l-9-3.5z"/><path d="M6.5 11.6V16c0 1.4 2.5 2.6 5.5 2.6s5.5-1.2 5.5-2.6v-4.4"/><path d="M21 10v4.5"/></svg></span>
+          <span class="bm-name">Lessons</span>
+          <span class="bm-sub">Openings, and when to wall</span>
+        </button>
+        <button class="bm-tile" data-mode="board" data-at="5,7,1,3">
+          <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="1"/><path d="M3.5 9.5h17M9.5 3.5v17"/><circle cx="6.5" cy="6.5" r="1.1"/><path d="M13 17l2.5-3.2 2 1.6 2.5-3.4"/></svg></span>
+          <span class="bm-name">Analysis board</span>
+          <span class="bm-sub">Play both sides, or import a game</span>
+        </button>
       </div>
 
-      <button class="link-btn" id="how-btn">How to play</button>
+      <footer class="menu-foot">
+        <button class="link-btn" id="how-btn">How to play</button>
+      </footer>
+    </section>
+
+    <!-- Appearance -->
+    <section id="appearance" class="screen sheet">
+      <button class="back-btn" id="look-back" aria-label="Back to menu">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>Back</span>
+      </button>
+      <div class="look-wrap">
+        <div class="look-preview">
+          <h2 class="panel-title">Appearance</h2>
+          <div class="board-frame look-board-frame">
+            <div class="board" id="look-board"></div>
+          </div>
+        </div>
+        <div class="look-sets">
+        <section class="look-row">
+          <h3 class="look-head">Theme</h3>
+          <div class="look-opts">
+            <button class="look-opt" data-look="theme" data-value="light"><span class="look-sw look-mode"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></span><span class="look-label">Light</span></button>
+            <button class="look-opt" data-look="theme" data-value="auto"><span class="look-sw look-mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4h8v16h-8z" fill="currentColor"/><rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></span><span class="look-label">System</span></button>
+            <button class="look-opt" data-look="theme" data-value="dark"><span class="look-sw look-mode"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" fill="currentColor"/></svg></span><span class="look-label">Dark</span></button>
+          </div>
+        </section>
+        <section class="look-row">
+          <h3 class="look-head">Palette</h3>
+          <div class="look-opts">
+            <button class="look-opt" data-look="palette" data-value="press"><span class="look-sw" data-pal="press"><i class="sw-bg"></i><i class="sw-me"></i><i class="sw-opp"></i></span><span class="look-label">Press</span></button>
+            <button class="look-opt" data-look="palette" data-value="dusk"><span class="look-sw" data-pal="dusk"><i class="sw-bg"></i><i class="sw-me"></i><i class="sw-opp"></i></span><span class="look-label">Dusk</span></button>
+            <button class="look-opt" data-look="palette" data-value="signal"><span class="look-sw" data-pal="signal"><i class="sw-bg"></i><i class="sw-me"></i><i class="sw-opp"></i></span><span class="look-label">Signal</span></button>
+            <button class="look-opt" data-look="palette" data-value="moss"><span class="look-sw" data-pal="moss"><i class="sw-bg"></i><i class="sw-me"></i><i class="sw-opp"></i></span><span class="look-label">Moss</span></button>
+          </div>
+        </section>
+        <section class="look-row">
+          <h3 class="look-head">Corners</h3>
+          <div class="look-opts">
+            <button class="look-opt" data-look="shape" data-value="square"><span class="look-sw look-shape"><i style="border-radius:1px"></i></span><span class="look-label">Square</span></button>
+            <button class="look-opt" data-look="shape" data-value="round"><span class="look-sw look-shape"><i style="border-radius:9px"></i></span><span class="look-label">Rounded</span></button>
+          </div>
+        </section>
+        <section class="look-row">
+          <h3 class="look-head">Pawns</h3>
+          <div class="look-opts">
+            <button class="look-opt" data-look="pawn" data-value="token"><span class="look-sw look-pawn"><i class="pw pw-token"></i></span><span class="look-label">Token</span></button>
+            <button class="look-opt" data-look="pawn" data-value="solid"><span class="look-sw look-pawn"><i class="pw pw-solid"></i></span><span class="look-label">Solid</span></button>
+            <button class="look-opt" data-look="pawn" data-value="ring"><span class="look-sw look-pawn"><i class="pw pw-ring"></i></span><span class="look-label">Ring</span></button>
+            <button class="look-opt" data-look="pawn" data-value="block"><span class="look-sw look-pawn"><i class="pw pw-block"></i></span><span class="look-label">Block</span></button>
+          </div>
+        </section>
+        <section class="look-row">
+          <h3 class="look-head">Board</h3>
+          <div class="look-opts">
+            <button class="look-opt" data-look="board" data-value="cells"><span class="look-sw look-board bd-cells"><i></i><i></i><i></i><i></i></span><span class="look-label">Cells</span></button>
+            <button class="look-opt" data-look="board" data-value="checker"><span class="look-sw look-board bd-checker"><i></i><i></i><i></i><i></i></span><span class="look-label">Checker</span></button>
+            <button class="look-opt" data-look="board" data-value="flat"><span class="look-sw look-board bd-flat"><i></i><i></i><i></i><i></i></span><span class="look-label">Flat</span></button>
+            <button class="look-opt" data-look="board" data-value="bare"><span class="look-sw look-board bd-bare"><i></i><i></i><i></i><i></i></span><span class="look-label">Bare</span></button>
+          </div>
+        </section>
+        <section class="look-row">
+          <h3 class="look-head">Sound</h3>
+          <div class="look-opts">
+            <button class="look-opt" data-look="sound" data-value="on"><span class="look-sw look-snd"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9v6h4l5 4V5L9 9H5z" fill="currentColor" stroke="none"/><path d="M17 9a4 4 0 0 1 0 6"/></svg></span><span class="look-label">On</span></button>
+            <button class="look-opt" data-look="sound" data-value="off"><span class="look-sw look-snd"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9v6h4l5 4V5L9 9H5z" fill="currentColor" stroke="none"/><path d="M17 10l4 4M21 10l-4 4"/></svg></span><span class="look-label">Off</span></button>
+          </div>
+        </section>
+          <button class="link-btn" id="look-reset">Reset to defaults</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Play vs Computer -->
+    <section id="bot-setup" class="screen sheet">
+      <button class="back-btn" id="bot-back" aria-label="Back to menu">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>Back</span>
+      </button>
+      <div class="online-panel setup-panel">
+        <h2 class="panel-title">Play vs Computer</h2>
+        <p class="panel-lead">Pick an opponent and set the game up. Path, the built-in engine, is yours to use in every bot game.</p>
+        <div class="bot-grid" id="bot-grid">
+          <button class="bot-card" data-diff="easy">
+            <span class="bot-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.4 14.4c.9 1.2 2.1 1.9 3.6 1.9s2.7-.7 3.6-1.9"/><circle cx="9.2" cy="9.8" r=".95" fill="currentColor" stroke="none"/><circle cx="14.8" cy="9.8" r=".95" fill="currentColor" stroke="none"/></svg></span>
+            <span class="bot-name">Easy</span>
+            <span class="bot-sub">Wanders at random</span>
+            <span class="bot-rec" data-record="easy"></span>
+          </button>
+          <button class="bot-card" data-diff="medium">
+            <span class="bot-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="2.5"/><path d="M12 8V4.6"/><circle cx="12" cy="3.4" r="1.1"/><circle cx="9" cy="13" r="1.1"/><circle cx="15" cy="13" r="1.1"/><path d="M2 12v3M22 12v3"/></svg></span>
+            <span class="bot-name">Medium</span>
+            <span class="bot-sub">Races, walls when it slips behind</span>
+            <span class="bot-rec" data-record="medium"></span>
+          </button>
+          <button class="bot-card" data-diff="hard">
+            <span class="bot-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="13" height="13" rx="3"/><path d="M8.8 14.6l2.3-3 2 1.6 2.1-3.2"/><path d="M9.5 2.6v2.9M14.5 2.6v2.9M9.5 18.5v2.9M14.5 18.5v2.9M2.6 9.5h2.9M2.6 14.5h2.9M18.5 9.5h2.9M18.5 14.5h2.9"/></svg></span>
+            <span class="bot-name">Hard</span>
+            <span class="bot-sub">The Path engine &mdash; searches ahead, plays to win</span>
+            <span class="bot-rec" data-record="hard"></span>
+          </button>
+        </div>
+        <div class="setup-block" id="bot-elo-block" hidden>
+          <div class="setup-label">Path strength</div>
+          <div class="elo-row">
+            <input type="range" id="bot-elo" min="100" max="3200" step="100" value="3200" aria-label="Path strength in Elo">
+            <output class="elo-val" id="bot-elo-val" for="bot-elo">3200</output>
+          </div>
+          <p class="elo-note" id="bot-elo-note"></p>
+        </div>
+        <div class="setup-block">
+          <div class="setup-label">Game settings</div>
+          <div class="settings-host" id="bot-settings"></div>
+        </div>
+        <button class="btn primary big" id="bot-start">Play</button>
+      </div>
     </section>
 
     <!-- Online (friend room code) -->
@@ -81,25 +258,25 @@
         <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
         <span>Back</span>
       </button>
-      <div class="online-panel">
+      <div class="online-panel setup-panel">
         <h2 class="panel-title">Play with a Friend</h2>
         <div id="online-choice">
-          <div class="setup-block">
-            <div class="setup-label">Game settings · used when you host</div>
+          <section class="make-block">
+            <h3 class="make-title">Set up a game</h3>
             <div class="settings-host" id="friend-settings"></div>
-          </div>
-          <button class="btn primary big" id="create-room">Create a room</button>
+            <div class="make-summary" id="friend-summary"></div>
+            <button class="btn primary big" id="create-room">Create a room</button>
+          </section>
           <div class="online-or">or</div>
-          <div class="join-row">
-            <input id="join-code" class="code-input" placeholder="CODE" maxlength="4"
-                   autocomplete="off" autocapitalize="characters" spellcheck="false" />
-            <button class="btn" id="join-room">Join</button>
-          </div>
-        </div>
-        <div id="room-display" hidden>
-          <div class="room-label">Share this code</div>
-          <div class="room-code" id="room-code">----</div>
-          <button class="btn ghost" id="copy-code">Copy code</button>
+          <section class="make-block">
+            <h3 class="make-title">Join a room</h3>
+            <div class="join-row">
+              <input id="join-code" class="code-input" placeholder="CODE" maxlength="4"
+                     autocomplete="off" autocapitalize="characters" spellcheck="false" />
+              <button class="btn" id="join-room">Join</button>
+            </div>
+            <p class="join-note">You will see the game on offer before anything starts — take the seat, watch instead, or pass.</p>
+          </section>
         </div>
         <div class="online-status" id="online-status"></div>
       </div>
@@ -187,6 +364,12 @@
           <span>Back</span>
         </button>
         <div class="status" id="status">Your turn</div>
+        <div class="room-chip" id="room-chip" hidden>
+          <span class="room-chip-label">Code</span>
+          <span class="room-chip-code" id="room-chip-code">----</span>
+          <button class="room-chip-copy" id="room-chip-copy" type="button" aria-label="Copy the game code"><span class="rc-word">Copy</span><span class="rc-glyph" aria-hidden="true">⧉</span></button>
+          <span class="room-chip-specs" id="room-chip-specs" hidden></span>
+        </div>
       </header>
 
       <div class="play">
@@ -202,12 +385,22 @@
           <span class="rail-clock" id="far-clock" hidden>10:00</span>
         </div>
 
+        <!-- In the wide layout the two wall boxes sit at the top and bottom of a 190px column
+             with nothing between them. A lesson is the one mode with something worth putting
+             there, so the track takes that gap and only that gap. -->
+        <div class="lesson-track" id="lesson-line" hidden></div>
+
         <div class="board-wrap">
+          <div class="evalbar" id="evalbar" hidden aria-hidden="true">
+            <div class="evalbar-track"><div class="evalbar-fill" id="evalbar-fill"></div></div>
+            <span class="evalbar-num" id="evalbar-num">0.0</span>
+          </div>
           <div class="board-frame">
             <div class="ranks" id="ranks" aria-hidden="true"></div>
             <div class="board" id="board"></div>
             <div class="files" id="files" aria-hidden="true"></div>
           </div>
+          <div class="emote-layer" id="emote-layer" aria-hidden="true"></div>
         </div>
 
         <div class="rail rail-bottom" id="tray">
@@ -222,20 +415,144 @@
           <span class="rail-clock" id="near-clock" hidden>10:00</span>
         </div>
 
+        <div class="rv-nav" id="rv-nav" hidden>
+          <button class="icon-btn" id="rv-first" title="First move" aria-label="First move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L9 12l9 6V6z"/><path d="M6 5v14"/></svg></button>
+          <button class="icon-btn" id="rv-prev" title="Previous move" aria-label="Previous move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <span class="rv-count" id="rv-count">0 / 0</span>
+          <button class="icon-btn" id="rv-next" title="Next move" aria-label="Next move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+          <button class="icon-btn" id="rv-last" title="Last move" aria-label="Last move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l9 6-9 6V6z"/><path d="M18 5v14"/></svg></button>
+        </div>
+
+        <!-- Move navigation in a live game. Deliberately the same control as the review's,
+             down to the class names: there is no reason for looking back mid-game and
+             looking back afterwards to be two different things to learn. -->
+        <div class="rv-nav tb-bar" id="tb-bar" hidden>
+          <button class="icon-btn" id="tb-first" title="First move" aria-label="First move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L9 12l9 6V6z"/><path d="M6 5v14"/></svg></button>
+          <button class="icon-btn" id="tb-prev" title="Previous move" aria-label="Previous move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <span class="rv-count" id="tb-count">0 / 0</span>
+          <button class="icon-btn" id="tb-next" title="Next move" aria-label="Next move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+          <button class="icon-btn" id="tb-last" title="Latest move" aria-label="Latest move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l9 6-9 6V6z"/><path d="M18 5v14"/></svg></button>
+        </div>
+
         <div class="match-actions" id="match-actions">
-          <button class="icon-btn" id="restart-btn" title="Restart" aria-label="Restart">↺</button>
-          <button class="icon-btn" id="draw-btn" title="Offer a draw" aria-label="Offer a draw" hidden>½</button>
-          <button class="icon-btn forfeit-btn" id="forfeit-btn" title="Resign" aria-label="Resign" hidden>⚑</button>
+          <button class="icon-btn" id="restart-btn" title="Restart" aria-label="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4.5h-4.5"/></svg></button>
+          <button class="icon-btn" id="board-import-btn" title="Import a game" aria-label="Import a game" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V5"/><path d="M8 9l4-4 4 4"/><path d="M4 20h16"/></svg></button>
+          <button class="icon-btn" id="setup-btn" title="Set up a position" aria-label="Set up a position" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="2.1"/><path d="M13.5 14.5h5M13.5 17.5h5M15.5 7h5"/></svg></button>
+          <button class="icon-btn" id="board-export-btn" title="Export this position" aria-label="Export this position" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></svg></button>
+          <button class="icon-btn" id="analysis-btn" title="Path engine analysis" aria-label="Toggle Path engine analysis"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16"/><path d="M7.5 15.5l3.5-4.5 3 2.5 4.5-6"/></svg></button>
+          <button class="icon-btn" id="draw-btn" title="Offer a draw" aria-label="Offer a draw" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14M5 15h14"/></svg></button>
+          <button class="icon-btn forfeit-btn" id="forfeit-btn" title="Resign" aria-label="Resign" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 5h10l-1.6 3.2L16 11.5H6"/></svg></button>
         </div>
 
         <aside class="side-right">
+          <div class="analysis" id="analysis" hidden>
+            <div class="analysis-head">
+              <span class="eng-brand">Path</span>
+              <span class="eng-depth" id="eng-depth">thinking…</span>
+            </div>
+            <div class="eng-body">
+              <div class="eng-row">
+                <span class="eng-label">Evaluation</span>
+                <span class="eng-score" id="eng-score">0.0</span>
+              </div>
+              <div class="eng-row">
+                <span class="eng-label">Best move</span>
+                <button class="eng-best" id="eng-best" type="button" title="Show this move on the board">—</button>
+              </div>
+              <!-- Why that move, in one sentence tied to a number the engine measured, and with
+                   the route it is about drawn on the board beside it. -->
+              <p class="eng-why" id="eng-why" hidden></p>
+              <p class="eng-alt" id="eng-alt" hidden></p>
+              <div class="eng-verdict" id="eng-verdict" hidden></div>
+              <div class="eng-acc" id="eng-acc" hidden></div>
+            </div>
+          </div>
+          <div class="review" id="review-panel" hidden>
+            <div class="analysis-head">
+              <span class="eng-brand">Path</span>
+              <span class="eng-depth" id="rv-progress">analysing…</span>
+            </div>
+            <div class="rv-body">
+              <canvas class="rv-graph" id="rv-graph" width="520" height="96" aria-label="Evaluation over the game"></canvas>
+              <div class="rv-verdict" id="rv-verdict" hidden></div>
+              <div class="rv-acc" id="rv-acc" hidden></div>
+              <div class="rv-tools">
+                <button class="rv-toggle" id="rv-show" type="button">
+                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></span><span>Path's move</span>
+                </button>
+                <button class="rv-toggle" id="rv-guess" type="button">
+                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span><span>Find best move</span>
+                </button>
+                <button class="rv-toggle" id="rv-export" type="button">
+                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></svg></span><span>Export</span>
+                </button>
+                <button class="rv-toggle" id="rv-import" type="button">
+                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V5"/><path d="M8 9l4-4 4 4"/><path d="M4 20h16"/></svg></span><span>Import</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- Setting up a position on the analysis board. It sits where the analysis panel sits
+               because it replaces it: Path is paused while the board is being built, since an
+               evaluation of a half-finished position is noise. -->
+          <div class="setup" id="setup-panel" hidden>
+            <div class="analysis-head">
+              <span class="eng-brand">Set up</span>
+              <span class="eng-depth" id="setup-count"></span>
+            </div>
+            <div class="eng-body">
+              <p class="setup-say">Drag a pawn onto any square. Click a junction to lay a wall, click a wall to take it off.</p>
+              <div class="setup-row">
+                <span class="setup-label">To move</span>
+                <div class="setup-seg" id="setup-turn"></div>
+              </div>
+              <div class="setup-row">
+                <span class="setup-label">Walls in hand</span>
+                <div class="setup-hands" id="setup-hands"></div>
+              </div>
+              <div class="setup-actions">
+                <button class="btn ghost" id="setup-clear" type="button">Clear board</button>
+                <button class="btn" id="setup-done" type="button">Done</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- The lesson's own panel. It takes the analysis panel's shape because it does the
+               same job from the player's side: say what is going on, and say it where the
+               player is already looking. -->
+          <div class="lesson" id="lesson-panel" hidden>
+            <div class="analysis-head">
+              <span class="eng-brand" id="lesson-kind">Lesson</span>
+              <span class="eng-depth" id="lesson-step"></span>
+            </div>
+            <div class="eng-body">
+              <div class="lesson-title" id="lesson-title"></div>
+              <p class="lesson-ask" id="lesson-ask"></p>
+              <p class="lesson-say" id="lesson-say" hidden></p>
+              <div class="lesson-actions">
+                <button class="btn" id="lesson-next" type="button" hidden>Next</button>
+                <button class="btn ghost" id="lesson-quit" type="button">Lessons</button>
+              </div>
+            </div>
+          </div>
           <div class="moves" id="moves">
             <div class="moves-head">Moves</div>
+            <!-- The named opening, when the game is in one. It appears on the move that makes
+                 the line and disappears the moment the game leaves it, so it is never a claim
+                 about a position it does not fit. -->
+            <div class="opening" id="opening" hidden>
+              <div class="opening-top">
+                <span class="opening-name" id="opening-name"></span>
+                <span class="opening-src" id="opening-src"></span>
+              </div>
+              <p class="opening-note" id="opening-note"></p>
+            </div>
             <div class="moves-list" id="moves-list"></div>
           </div>
           <div class="chat game-chat" id="game-chat" hidden>
             <div class="chat-head">Chat</div>
             <div class="chat-log" id="game-chat-log"></div>
+            <div class="emote-bar" id="emote-bar" hidden></div>
             <form class="chat-form" id="game-chat-form">
               <input class="chat-input" id="game-chat-input" maxlength="200" placeholder="Say something…" autocomplete="off" />
               <button class="btn" type="submit">Send</button>
@@ -243,10 +560,47 @@
           </div>
         </aside>
       </div>
-      <div class="tray-hint" id="tray-hint">drag a wall onto the board · press Space to rotate</div>
+      <div class="tray-hint" id="tray-hint">drag a wall onto the board, or click one to pick it up · Space to rotate</div>
     </section>
 
     <!-- Tournament setup (card) -->
+    <section id="lessons" class="screen sheet">
+      <button class="back-btn" id="lessons-back" aria-label="Back to menu">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>Back</span>
+      </button>
+      <div class="online-panel lessons-panel">
+        <h2 class="panel-title">Lessons</h2>
+
+        <h3 class="lesson-group">Openings</h3>
+        <div class="lesson-list" id="lesson-openings"></div>
+
+        <h3 class="lesson-group">Positions</h3>
+        <div class="lesson-list" id="lesson-drills"></div>
+
+        <div class="history-actions">
+          <button class="link-btn danger-link" id="lessons-reset" hidden>Forget my progress</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="history" class="screen sheet">
+      <button class="back-btn" id="history-back" aria-label="Back to menu">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>Back</span>
+      </button>
+      <div class="online-panel history-panel">
+        <h2 class="panel-title">Game history</h2>
+        <p class="panel-lead">Your last 40 games, kept on this device. Open one to replay it move by move with Path.</p>
+        <div class="history-list" id="history-list"></div>
+        <div class="history-actions">
+          <button class="btn ghost" id="history-import">Import game</button>
+          <button class="link-btn danger-link" id="history-clear" hidden>Clear history</button>
+        </div>
+        <input type="file" id="import-file" accept="application/json,.json" hidden />
+      </div>
+    </section>
+
     <section id="tournament-setup" class="screen sheet">
       <button class="back-btn" id="tp-back" aria-label="Back to menu">
         <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
@@ -302,7 +656,9 @@
         <div class="overlay-actions">
           <button class="btn primary" id="continue-btn" hidden>Continue</button>
           <button class="btn primary" id="rematch-btn">Rematch</button>
-          <button class="btn" id="menu-btn">Menu</button>
+          <button class="btn" id="review-btn">Game review</button>
+          <button class="btn" id="export-btn">Export game</button>
+          <button class="btn ghost" id="menu-btn">Menu</button>
         </div>
       </div>
     </div>
@@ -370,30 +726,24 @@
       </div>
     </div>
 
-    <!-- Difficulty picker -->
-    <div id="difficulty" class="overlay">
-      <div class="overlay-card">
-        <h2>Pick your bot</h2>
+    <!-- What am I joining? (shown to the guest before the board appears) -->
+    <div id="join-preview" class="overlay">
+      <div class="overlay-card jp-card">
+        <h2>Ready to play?</h2>
+        <div class="jp-vs">
+          <span class="jp-side"><span class="jp-dot me"></span><span class="jp-who" id="jp-you">You</span></span>
+          <span class="jp-x">vs</span>
+          <span class="jp-side"><span class="jp-dot opp"></span><span class="jp-who" id="jp-opp">Opponent</span></span>
+        </div>
+        <div class="jp-tag" id="jp-tag">Standard game</div>
         <div class="setup-block">
           <div class="setup-label">Game settings</div>
-          <div class="settings-host" id="bot-settings"></div>
-        </div>
-        <div class="diff-list">
-          <button class="diff-btn" data-diff="easy">
-            <span class="diff-main"><span class="diff-name">Easy</span><span class="diff-sub">Wanders at random</span></span>
-            <span class="diff-rec" data-record="easy"></span>
-          </button>
-          <button class="diff-btn" data-diff="medium">
-            <span class="diff-main"><span class="diff-name">Medium</span><span class="diff-sub">Races, walls when it slips behind</span></span>
-            <span class="diff-rec" data-record="medium"></span>
-          </button>
-          <button class="diff-btn" data-diff="hard">
-            <span class="diff-main"><span class="diff-name">Hard</span><span class="diff-sub">Expert engine — searches ahead, plays to win</span></span>
-            <span class="diff-rec" data-record="hard"></span>
-          </button>
+          <div class="settings-view" id="jp-settings"></div>
         </div>
         <div class="overlay-actions">
-          <button class="btn ghost" id="diff-close">Back</button>
+          <button class="btn primary" id="jp-accept">Play</button>
+          <button class="btn" id="jp-watch" hidden>Watch</button>
+          <button class="btn ghost" id="jp-decline">Not this time</button>
         </div>
       </div>
     </div>
@@ -404,10 +754,12 @@
         <h2>How to play</h2>
         <ul class="how-list">
           <li>Each turn: <strong>move</strong> your pawn one step, or <strong>place a wall</strong>.</li>
-          <li>First pawn to reach the opposite row wins.</li>
-          <li>Walls go between cells and block movement. You start with 10.</li>
+          <li>First pawn to reach the opposite row wins — or in <strong>Race</strong>, where you both start on the same side, the shared top row. In <strong>King of the hill</strong> it's the single ringed cell in the centre instead.</li>
+          <li>Walls go between cells and block movement. You start with 10. Drag one onto a junction, or click one and then click a junction.</li>
           <li>A wall can't fully trap a player — both must keep a path home.</li>
           <li>Jump a face-to-face opponent; side-step if a wall is behind them.</li>
+          <li>The graph button in a bot or local game turns on <strong>Path</strong>, the built-in engine: a bar showing who is winning, its best move drawn straight away as a <strong>green</strong> arrow or ghost wall, and a verdict on every move you play — brilliant, best, book, inaccuracy, mistake or blunder.</li>
+          <li>After a game, hit <strong>Game review</strong> to replay it move by move with Path's move marked in green on every position, see where it turned, and try to find the best move yourself. Past games are kept under <strong>Game history</strong>.</li>
         </ul>
         <div class="overlay-actions">
           <button class="btn primary" id="how-close">Got it</button>
@@ -416,13 +768,21 @@
     </div>
 
     <div id="toast" class="toast"></div>
-    <div class="version">v2.2</div>
+    <div class="version">v3.0</div>
   </main>
 
   <script src="bg.js"></script>
   <script src="rules.js"></script>
   <script src="bot.js"></script>
   <script src="net.js"></script>
+  <script src="sfx.js"></script>
+  <script src="music.js"></script>
+  <script src="path/netweights.js"></script>
+  <script src="path/engine.js"></script>
+  <script src="path/book.js"></script>
+  <script src="path/openings.js"></script>
+  <script src="path/explain.js"></script>
+  <script src="path/lessons.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

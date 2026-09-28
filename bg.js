@@ -1,7 +1,8 @@
-// bg.js — atmospheric generative background for Detour.
-// A faint board-grid with teal/amber "wall" segments drifting across it, echoing
-// the game's core mechanic. Deliberately low-contrast so it reads as texture, not
-// decoration. Pure canvas, no deps; pauses when the tab is hidden; honours
+// bg.js — the drifting board behind every screen.
+// A faint grid of junction marks with "wall" segments sliding across it, echoing the
+// game's one mechanic. Flat ink at low opacity, read straight out of the page's own
+// palette so it follows the theme rather than carrying its own colours — no glow, no
+// gradient. Pure canvas, no deps; pauses when the tab is hidden; honours
 // prefers-reduced-motion (draws a single static frame instead of animating).
 
 (function () {
@@ -10,7 +11,20 @@
   const ctx = canvas.getContext('2d');
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const ME = '#57cfc0', OPP = '#f0a64e';      // the two player colours
+  // the palette is whatever the stylesheet currently says it is
+  let ME = '#ff5c3b', OPP = '#4e9fff', GRID = '#626d80', wallAlpha = 0.055, gridAlpha = 0.075;
+  function readPalette() {
+    const cs = getComputedStyle(document.documentElement);
+    const v = k => cs.getPropertyValue(k).trim();
+    ME = v('--me') || ME;
+    OPP = v('--opp') || OPP;
+    GRID = v('--faint') || GRID;
+    // ink on paper needs to be darker to register at all; light ink on a dark ground
+    // carries much further, so the same alpha would shout
+    const dark = v('color-scheme') === 'dark';
+    wallAlpha = dark ? 0.05 : 0.10;
+    gridAlpha = dark ? 0.09 : 0.16;
+  }
   let W = 0, H = 0, cell = 64, raf = 0, last = 0;
   let walls = [];
 
@@ -50,19 +64,21 @@
     ctx.clearRect(0, 0, W, H);
 
     // static grid points — the board's cross-points
-    ctx.fillStyle = 'rgba(122,138,154,0.05)';
+    ctx.globalAlpha = gridAlpha;
+    ctx.fillStyle = GRID;
     for (let y = cell; y < H; y += cell)
       for (let x = cell; x < W; x += cell) ctx.fillRect(x - 1, y - 1, 2, 2);
+    ctx.globalAlpha = 1;
 
     // drifting wall segments
     const tsec = now / 1000;
-    ctx.lineCap = 'round';
-    ctx.lineWidth = 3;
+    ctx.lineCap = 'butt';        // printed bars, not soft strokes
+    ctx.lineWidth = 4;
     for (const w of walls) {
       w.x += w.vx * dt; w.y += w.vy * dt;
       if (w.x > W + cell) { w.x = -cell; w.y = Math.random() * H; }
       if (w.y > H + cell) { w.y = -cell; w.x = Math.random() * W; }
-      const a = 0.045 + 0.04 * (0.5 + 0.5 * Math.sin(tsec * w.pulse + w.phase));
+      const a = wallAlpha * (0.72 + 0.56 * (0.5 + 0.5 * Math.sin(tsec * w.pulse + w.phase)));
       ctx.globalAlpha = a;
       ctx.strokeStyle = w.mine ? ME : OPP;
       ctx.beginPath();
@@ -80,6 +96,14 @@
 
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
+  // follow the theme, however it changed: the switch in the menu, or the system flipping
+  const repaint = () => { readPalette(); if (reduce) { last = performance.now(); frame(performance.now()); stop(); } };
+  window.addEventListener('detour:theme', repaint);
+  if (window.matchMedia) {
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    if (mq.addEventListener) mq.addEventListener('change', repaint);
+  }
+  readPalette();
   resize();
   if (reduce) { last = performance.now(); frame(performance.now()); stop(); }  // one static frame
   else start();

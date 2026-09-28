@@ -72,13 +72,21 @@
     if (hbTimer) return;
     hbTimer = setInterval(() => {
       const now = Date.now();
-      const list = conns.size ? [...conns.values()] : (conn ? [conn] : []);
+      // A 1v1 host with spectators holds BOTH kinds at once: the opponent on `conn`, the
+      // watchers in `conns`. The old list was one or the other, so the moment someone started
+      // watching, the game stopped noticing that its own opponent had gone silent.
+      const list = [...conns.values()];
+      if (conn && !conns.has(conn.peer)) list.push(conn);
       for (const c of list) {
         if (!c.open) continue;
         if (c._seen && now - c._seen > STALE_MS) {      // peer went silent → treat as gone
+          // Raise it once, here, and mark the channel: closing it may or may not fire its own
+          // close event, and the app should not have to cope with hearing about the same
+          // disappearance twice.
+          c._gone = true;
+          if (c === conn) { conn = null; cb && cb({ type: 'close' }); }
+          else if (conns.delete(c.peer)) cb && cb({ type: c._spec ? 'spec-close' : 'disconnect', id: c.peer });
           try { c.close(); } catch { /* ignore */ }
-          if (conns.size) { if (conns.delete(c.peer)) cb && cb({ type: 'disconnect', id: c.peer }); }
-          else cb && cb({ type: 'close' });
         } else { try { c.send({ __hb: 'ping' }); } catch { /* ignore */ } }
       }
     }, PING_MS);
@@ -120,12 +128,56 @@
   const genCode = () => Array.from({ length: 4 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');
 
   // ---------- 1v1 (friend) ----------
+  // A room holds one opponent and any number of watchers. The two are told apart by the
+  // metadata the joiner sends with its connection, which arrives before the channel opens —
+  // so the host never has to guess, and an old build (which sends none) is a player, exactly
+  // as it always was.
+  const MAX_SPECS = 12;        // a phone hosting a game should not be asked to feed a crowd
+  const specCount = () => { let n = 0; conns.forEach(c => { if (c._spec) n++; }); return n; };
+  function sendRefusal(c, why) {
+    try { c.send({ type: 'room-full', spec: why === 'spec' }); } catch { /* ignore */ }
+    setTimeout(() => { try { c.close(); } catch { /* ignore */ } }, 300);
+  }
+  const refuse = (c, why) => c.on('open', () => sendRefusal(c, why));   // not open yet
+  function bindSpec(c) {
+    c._spec = true;
+    c.on('open', () => {
+      if (specCount() >= MAX_SPECS) return sendRefusal(c, 'spec');   // already open
+      touch(c); conns.set(c.peer, c); startHeartbeat();
+      cb && cb({ type: 'spec-connect', id: c.peer });
+    });
+    c.on('data', d => { if (handleHB(d, c)) return; cb && cb({ type: 'spec-data', id: c.peer, msg: d }); });
+    c.on('close', () => { if (conns.delete(c.peer)) cb && cb({ type: 'spec-close', id: c.peer }); });
+    c.on('error', () => { /* one watcher's error must never sink the game */ });
+  }
+
   function bind(c) {
     conn = c;
-    c.on('data', d => { if (handleHB(d, c)) return; cb && cb({ type: 'data', msg: d }); });
+    c.on('data', d => {
+      if (handleHB(d, c)) return;
+      cb && cb(c._spec ? { type: 'spec-data', id: c.peer, msg: d } : { type: 'data', msg: d });
+    });
     c.on('open', () => { touch(c); startHeartbeat(); cb && cb({ type: 'open' }); });
-    c.on('close', () => cb && cb({ type: 'close' }));
+    c.on('close', () => {
+      if (c._gone) return;
+      if (c._spec) { if (conns.delete(c.peer)) cb && cb({ type: 'spec-close', id: c.peer }); return; }
+      cb && cb({ type: 'close' });
+    });
     c.on('error', e => cb && cb({ type: 'error', err: e }));
+  }
+  // Move the visitor out of the seat and into the audience without touching the connection:
+  // it stops being the opponent, the seat opens for the next person, and the same link now
+  // carries the position instead of the moves. Answers with the peer's id, or null if the
+  // seat was already empty.
+  function toSpectator() {
+    if (!conn) return null;
+    const c = conn;
+    conn = null;                 // either way the seat opens: they are not playing
+    if (specCount() >= MAX_SPECS) { c._gone = true; sendRefusal(c, 'spec'); return null; }
+    c._spec = true;
+    conns.set(c.peer, c);
+    startHeartbeat();
+    return c.peer;
   }
 
   async function host(onEvent) {
@@ -138,7 +190,11 @@
         const code = genCode();
         peer = new Peer(PREFIX + code, opts);
         peer.on('open', () => resolve(code));
-        peer.on('connection', c => { if (conn) { c.close(); return; } bind(c); });
+        peer.on('connection', c => {
+          if (c.metadata && c.metadata.spec) { bindSpec(c); return; }
+          if (conn) return refuse(c, 'seat');   // the seat is taken — say so instead of timing out
+          bind(c);
+        });
         peer.on('error', e => {
           if (e.type === 'unavailable-id' && tries++ < 5) { peer.destroy(); make(); }
           else { cb && cb({ type: 'error', err: e }); reject(e); }
@@ -148,7 +204,7 @@
     });
   }
 
-  async function join(code, onEvent) {
+  async function join(code, onEvent, how) {
     await ensureLib();
     cb = onEvent;
     const opts = await peerOpts();
@@ -166,7 +222,7 @@
       peer = new Peer(undefined, opts);
       peer.on('open', () => {
         if (stale()) return;
-        const c = peer.connect(target, { reliable: true });
+        const c = peer.connect(target, { reliable: true, metadata: { spec: !!(how && how.spectate) } });
         conn = c;
         c.on('data', d => { if (handleHB(d, c)) return; cb && cb({ type: 'data', msg: d }); });
         c.on('open', () => { if (stale()) return; done = true; touch(c); startHeartbeat(); cb && cb({ type: 'open' }); });
@@ -180,6 +236,17 @@
   }
 
   function send(msg) { if (conn && conn.open) conn.send(msg); }
+  // Drop the current 1v1 connection without tearing the room down, so a host whose
+  // visitor walked away before the game started can take the next one that knocks.
+  function release() {
+    if (conn) conn._gone = true;   // dropped on purpose: that is not a disconnection to report
+    try { conn && conn.close(); } catch { /* ignore */ }
+    conn = null;
+    if (!conns.size) stopHeartbeat();   // watchers, if any, still need their pings
+  }
+  // ---- talking to the watchers of a 1v1 room ----
+  function sendSpecs(msg) { conns.forEach(c => { if (c._spec && c.open) c.send(msg); }); }
+  const specs = () => specCount();
 
   // ---------- hub (tournament) ----------
   async function hostHub(onEvent) {
@@ -351,5 +418,5 @@
     conn = null; peer = null; cb = null;
   }
 
-  window.Net = { ensureLib, host, join, send, hostHub, joinHub, broadcast, sendTo, kick, sendHost, findMatch, cancelMatch, close };
+  window.Net = { ensureLib, host, join, send, release, toSpectator, sendSpecs, specs, hostHub, joinHub, broadcast, sendTo, kick, sendHost, findMatch, cancelMatch, close };
 })();

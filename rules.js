@@ -1,15 +1,24 @@
 // rules.js — pure game logic for Detour (Quoridor-style race)
-// 2-player: an N×N board (N = 5..15; default 9). Player 0 starts bottom and races to the top row;
-// player 1 starts top and races to the bottom.
-// 4-player: the board grows to (N+2)×(N+2) with the four single corner cells cut out (an octagon).
-// Four pawns start at the middle of each outer edge and race to the opposite edge; turns go
-// clockwise (bottom → left → top → right). First pawn to reach its goal edge wins.
+// 2-player: a ROWS×COLS board (each side 5..15; default 9×9 — boards need not be square).
+// Player 0 starts on the bottom row and races to the top row; player 1 starts top and races bottom.
+// Race: both pawns instead start side by side on the BOTTOM row, in their own lanes, and race
+// the same way to the top row — first one there wins, so walls cut both ways.
+// King of the hill: everyone keeps their usual start but the goal becomes a SINGLE cell at the
+// centre of the board — first pawn to stand on it wins. Equal distances need a true centre, so
+// the caller should hand this odd row and column counts (the settings layer enforces that).
+// 4-player: the board grows to (ROWS+2)×(COLS+2) with the four single corner cells cut out (an
+// octagon). Four pawns start at the middle of each outer edge and race to the opposite edge; turns
+// go clockwise (bottom → left → top → right). First pawn to reach its goal edge wins. Fair play
+// needs equal opposing edges, so the 4-player board is always square.
 //
 // Modifiers ride on the state so one engine serves every variant:
-//   s.size     — actual board dimension (N for 2p, N+2 for 4p).  s.players — 2 or 4.
+//   s.rows/s.cols — actual board dimensions (inner +2 each in 4p).  s.players — 2 or 4.
 //   s.holes    — cut corner cells (Set; empty for 2p).           s.order — clockwise turn order.
-//   s.goals[p] — {axis:'r'|'c', at} the edge player p must reach.
-//   s.wallLen  — length L of a player wall (1..size-1).           s.inverted — misère (2-player only).
+//   s.goals[p] — what player p must reach: {cell:{r,c}} under king of the hill, otherwise
+//                {axis:'r'|'c', at} for a whole goal edge.
+//   s.wallLen  — length L of a player wall (1..min(rows,cols)-1).  s.inverted — misère (2p only).
+//   s.race     — both pawns start on the bottom row sharing one goal (2-player only).
+//   s.koth     — every goal collapses to the one centre cell (works with 2 or 4 players).
 //   fixed walls — pre-placed neutral "Debris" walls of any length (s.fixedH/V/HP/VP + s.fixedWalls).
 
 (function () {
@@ -19,7 +28,7 @@
 
   const key = (r, c) => r + ',' + c;
   const isHole = (s, r, c) => !!(s.holes && s.holes.has(key(r, c)));
-  const inBounds = (s, r, c) => r >= 0 && r < s.size && c >= 0 && c < s.size && !isHole(s, r, c);
+  const inBounds = (s, r, c) => r >= 0 && r < s.rows && c >= 0 && c < s.cols && !isHole(s, r, c);
   const randInt = n => Math.floor(Math.random() * n);
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -28,29 +37,49 @@
   const hPosts = (r, c, len) => { const a = []; for (let i = 0; i < len - 1; i++) a.push(key(r, c + i)); return a; };
   const vPosts = (r, c, len) => { const a = []; for (let i = 0; i < len - 1; i++) a.push(key(r + i, c)); return a; };
 
+  // Race start columns: two lanes mirrored about the board's centre line, one cell of clearance
+  // between them on odd widths and two on even, so neither pawn opens closer to the middle.
+  function raceStarts(cols) {
+    const mid = (cols - 1) / 2;
+    const off = cols % 2 ? 1 : 1.5;
+    return [Math.round(mid - off), Math.round(mid + off)];
+  }
+
   function createState(opts) {
     const o = opts || {};
     const players = o.players === 4 ? 4 : 2;
-    const inner = o.size || DEFAULT_SIZE;
-    const size = players === 4 ? inner + 2 : inner;
+    const innerRows = o.rows || o.size || DEFAULT_SIZE;
+    const innerCols = players === 4 ? innerRows : (o.cols || o.size || DEFAULT_SIZE);
+    const rows = players === 4 ? innerRows + 2 : innerRows;
+    const cols = players === 4 ? innerCols + 2 : innerCols;
     const wallCount = o.walls != null ? o.walls : WALL_MAX;
-    const mid = Math.floor(size / 2);
+    const midR = Math.floor(rows / 2), midC = Math.floor(cols / 2);
+    const race = players === 2 && !!o.race;
+    const koth = !!o.koth;
     const holes = new Set();
     let pawns, goals, order;
     if (players === 4) {
-      [[0, 0], [0, size - 1], [size - 1, 0], [size - 1, size - 1]].forEach(([r, c]) => holes.add(key(r, c)));
-      pawns = [{ r: size - 1, c: mid }, { r: 0, c: mid }, { r: mid, c: 0 }, { r: mid, c: size - 1 }];
-      goals = [{ axis: 'r', at: 0 }, { axis: 'r', at: size - 1 }, { axis: 'c', at: size - 1 }, { axis: 'c', at: 0 }];
+      [[0, 0], [0, cols - 1], [rows - 1, 0], [rows - 1, cols - 1]].forEach(([r, c]) => holes.add(key(r, c)));
+      pawns = [{ r: rows - 1, c: midC }, { r: 0, c: midC }, { r: midR, c: 0 }, { r: midR, c: cols - 1 }];
+      goals = [{ axis: 'r', at: 0 }, { axis: 'r', at: rows - 1 }, { axis: 'c', at: cols - 1 }, { axis: 'c', at: 0 }];
       order = [0, 2, 1, 3];   // clockwise: bottom, left, top, right
+    } else if (race) {
+      const [c0, c1] = raceStarts(cols);
+      pawns = [{ r: rows - 1, c: c0 }, { r: rows - 1, c: c1 }];
+      goals = [{ axis: 'r', at: 0 }, { axis: 'r', at: 0 }];   // same side, same finish line
+      order = [0, 1];
     } else {
-      pawns = [{ r: size - 1, c: mid }, { r: 0, c: mid }];
-      goals = [{ axis: 'r', at: 0 }, { axis: 'r', at: size - 1 }];
+      pawns = [{ r: rows - 1, c: midC }, { r: 0, c: midC }];
+      goals = [{ axis: 'r', at: 0 }, { axis: 'r', at: rows - 1 }];
       order = [0, 1];
     }
+    // king of the hill keeps every start where it is and collapses all the goal edges into the
+    // one centre cell, so everybody is racing the same square from their own side
+    if (koth) goals = pawns.map(() => ({ cell: { r: midR, c: midC } }));
     const s = {
-      size, players, inner, holes, order, goals,
-      wallLen: clamp(o.wallLen != null ? o.wallLen : 2, 1, size - 1),
-      inverted: players === 2 && !!o.inverted,
+      rows, cols, players, innerRows, innerCols, holes, order, goals, race, koth,
+      wallLen: clamp(o.wallLen != null ? o.wallLen : 2, 1, Math.min(rows, cols) - 1),
+      inverted: players === 2 && !race && !koth && !!o.inverted,
       turn: 0,
       pawns,
       walls: pawns.map(() => wallCount),
@@ -66,9 +95,9 @@
 
   function cloneState(s) {
     return {
-      size: s.size, players: s.players, inner: s.inner,
+      rows: s.rows, cols: s.cols, players: s.players, innerRows: s.innerRows, innerCols: s.innerCols,
       holes: s.holes, order: s.order, goals: s.goals,   // immutable after creation → shared
-      wallLen: s.wallLen, inverted: s.inverted,
+      wallLen: s.wallLen, inverted: s.inverted, race: s.race, koth: s.koth,
       turn: s.turn,
       pawns: s.pawns.map(p => ({ ...p })),
       walls: s.walls.slice(),
@@ -100,24 +129,25 @@
   }
   function fixedConflict(s, orient, r, c, len) {
     if (orient === 'h') {
-      if (r < 0 || r > s.size - 2 || c < 0 || c > s.size - len) return true;
+      if (r < 0 || r > s.rows - 2 || c < 0 || c > s.cols - len) return true;
       if (touchesHole(s, 'h', r, c, len)) return true;
       for (const k of hEdges(r, c, len)) if (s.fixedH.has(k)) return true;
       for (const k of hPosts(r, c, len)) if (s.fixedVP.has(k)) return true;
       return false;
     }
-    if (r < 0 || r > s.size - len || c < 0 || c > s.size - 2) return true;
+    if (r < 0 || r > s.rows - len || c < 0 || c > s.cols - 2) return true;
     if (touchesHole(s, 'v', r, c, len)) return true;
     for (const k of vEdges(r, c, len)) if (s.fixedV.has(k)) return true;
     for (const k of vPosts(r, c, len)) if (s.fixedHP.has(k)) return true;
     return false;
   }
   function placeRandomWalls(s, count, len) {
+    if (len > Math.min(s.rows, s.cols) - 1) return;   // wouldn't fit on a narrow board
     let placed = 0, guard = 0, cap = count * 80 + 300;
     while (placed < count && guard++ < cap) {
       const orient = Math.random() < 0.5 ? 'h' : 'v';
-      const r = orient === 'h' ? randInt(s.size - 1) : randInt(s.size - len + 1);
-      const c = orient === 'h' ? randInt(s.size - len + 1) : randInt(s.size - 1);
+      const r = orient === 'h' ? randInt(s.rows - 1) : randInt(s.rows - len + 1);
+      const c = orient === 'h' ? randInt(s.cols - len + 1) : randInt(s.cols - 1);
       if (fixedConflict(s, orient, r, c, len)) continue;
       addFixedWall(s, orient, r, c, len);
       if (s.pawns.every((_, i) => hasPath(s, i))) placed++;
@@ -181,11 +211,14 @@
     return forward.length ? forward : moves;
   }
 
-  // cells that make up a player's goal edge (excluding any holes)
+  // cells that make up a player's goal — one square under king of the hill, otherwise a whole
+  // edge (excluding any holes)
   function goalCells(s, player) {
     const g = s.goals[player];
+    if (g.cell) return isHole(s, g.cell.r, g.cell.c) ? [] : [{ r: g.cell.r, c: g.cell.c }];
+    const n = g.axis === 'r' ? s.cols : s.rows;   // a goal row spans the columns, and vice versa
     const out = [];
-    for (let i = 0; i < s.size; i++) {
+    for (let i = 0; i < n; i++) {
       const r = g.axis === 'r' ? g.at : i;
       const c = g.axis === 'c' ? g.at : i;
       if (!isHole(s, r, c)) out.push({ r, c });
@@ -224,7 +257,7 @@
   function wallConflict(s, orient, r, c) {
     const L = s.wallLen || 2;
     if (orient === 'h') {
-      if (r < 0 || r > s.size - 2 || c < 0 || c > s.size - L) return true;
+      if (r < 0 || r > s.rows - 2 || c < 0 || c > s.cols - L) return true;
       if (touchesHole(s, 'h', r, c, L)) return true;
       for (let cc = c - L + 1; cc <= c + L - 1; cc++) if (s.hWalls.has(key(r, cc))) return true;
       for (let cc = c; cc <= c + L - 1; cc++) if (s.fixedH.has(key(r, cc))) return true;
@@ -234,7 +267,7 @@
       }
       return false;
     }
-    if (r < 0 || r > s.size - L || c < 0 || c > s.size - 2) return true;
+    if (r < 0 || r > s.rows - L || c < 0 || c > s.cols - 2) return true;
     if (touchesHole(s, 'v', r, c, L)) return true;
     for (let rr = r - L + 1; rr <= r + L - 1; rr++) if (s.vWalls.has(key(rr, c))) return true;
     for (let rr = r; rr <= r + L - 1; rr++) if (s.fixedV.has(key(rr, c))) return true;
@@ -259,7 +292,7 @@
     const p = s.turn;
     s.pawns[p] = { r: to.r, c: to.c };
     const g = s.goals[p];
-    const reached = (g.axis === 'r' ? to.r : to.c) === g.at;
+    const reached = g.cell ? (to.r === g.cell.r && to.c === g.cell.c) : (g.axis === 'r' ? to.r : to.c) === g.at;
     if (reached) s.winner = s.inverted ? 1 - p : p;   // inverted is 2-player only
     else s.turn = nextTurn(s);
     return s;
@@ -274,10 +307,44 @@
     return s;
   }
 
-  window.Rules = {
+  // ---- snapshots ----
+  // A position as plain data: no Sets, no functions, so it survives JSON and survives being
+  // posted to a worker. It lives here rather than in the page because the worker needs it too
+  // and neither copy may be allowed to drift from the other.
+  function serState(s) {
+    return { nr: s.rows, nc: s.cols, pl: s.players, ir: s.innerRows, ic: s.innerCols,
+      rc: !!s.race, kh: !!s.koth, wl: s.wallLen, inv: s.inverted, fx: s.fixedWalls, t: s.turn,
+      p: s.pawns.map(x => [x.r, x.c]), w: s.walls.slice(), h: [...s.hWalls], v: [...s.vWalls],
+      by: s.wallBy, win: s.winner };
+  }
+  function deState(o) {
+    const players = o.pl || 2;
+    const rows = o.nr || o.n || DEFAULT_SIZE;
+    const cols = o.nc || o.n || DEFAULT_SIZE;
+    // createState lays out the pawns and goal edges, so the variant flags it keys off (players,
+    // race) must go in there; the rest of the snapshot is stamped on afterwards.
+    const s = createState({
+      rows: players === 4 ? (o.ir || rows - 2) : rows,
+      cols: players === 4 ? (o.ic || cols - 2) : cols,
+      players, race: !!o.rc, koth: !!o.kh,
+    });
+    s.wallLen = o.wl || 2;
+    s.inverted = !!o.inv;
+    setFixedWalls(s, o.fx);
+    s.turn = o.t;
+    s.pawns = o.p.map(([r, c]) => ({ r, c }));
+    s.walls = o.w.slice();
+    s.hWalls = new Set(o.h);
+    s.vWalls = new Set(o.v);
+    s.wallBy = o.by || {};
+    s.winner = o.win;
+    return s;
+  }
+
+  (typeof window !== 'undefined' ? window : self).Rules = {
     SIZE: DEFAULT_SIZE, DEFAULT_SIZE, WALL_MAX, DIRS, key, inBounds, isHole,
-    createState, cloneState, edgeBlocked, legalMoves, rawMoves, setFixedWalls,
+    createState, cloneState, edgeBlocked, legalMoves, rawMoves, setFixedWalls, raceStarts, goalCells,
     distanceMap, pathLength, hasPath, wallConflict, canPlaceWall,
-    applyMove, applyWall,
+    applyMove, applyWall, serState, deState,
   };
 })();

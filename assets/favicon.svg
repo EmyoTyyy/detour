@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Detour">
+  <!-- flat, two inks: your route turning around the opponent's wall. Follows the
+       viewer's theme, the same two palettes the page uses. -->
+  <style>
+    .tile { fill: #ece5d7; stroke: #bcae96; }
+    .route { stroke: #c8452b; }
+    .dot { fill: #c8452b; }
+    .wall { fill: #2d4e8a; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #131824; stroke: #333d52; }
+      .route { stroke: #ff5c3b; }
+      .dot { fill: #ff5c3b; }
+      .wall { fill: #4e9fff; }
+    }
+  </style>
+  <rect class="tile" x="2" y="2" width="60" height="60" rx="4" stroke-width="2"/>
+  <path class="route" d="M20 48 V38 H44 V21" fill="none" stroke-width="6"
+        stroke-linecap="square" stroke-linejoin="miter"/>
+  <path class="route" d="M37 27 L44 19 L51 27" fill="none" stroke-width="6"
+        stroke-linecap="square" stroke-linejoin="miter"/>
+  <circle class="dot" cx="20" cy="48" r="5"/>
+  <rect class="wall" x="10" y="30" width="24" height="5" rx="1"/>
+</svg>

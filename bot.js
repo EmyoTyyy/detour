@@ -28,8 +28,8 @@
     const myBefore = R.pathLength(state, me);
     const oppBefore = R.pathLength(state, opp);
     const out = [];
-    for (let r = 0; r < state.size - 1; r++) {
-      for (let c = 0; c < state.size - 1; c++) {
+    for (let r = 0; r < state.rows - 1; r++) {
+      for (let c = 0; c < state.cols - 1; c++) {
         for (const orient of ['h', 'v']) {
           if (!R.canPlaceWall(state, me, orient, r, c)) continue;
           const set = orient === 'h' ? state.hWalls : state.vWalls;
@@ -82,11 +82,11 @@
   }
 
   // Walls that block the orthogonal step a->b (the two anchors that cover that edge).
-  function pushEdgeWalls(size, L, a, b, seen, cand) {
+  function pushEdgeWalls(rows, cols, L, a, b, seen, cand) {
     const add = (orient, r, c) => {
       if (r < 0 || c < 0) return;
-      if (orient === 'h' && (r > size - 2 || c > size - L)) return;
-      if (orient === 'v' && (r > size - L || c > size - 2)) return;
+      if (orient === 'h' && (r > rows - 2 || c > cols - L)) return;
+      if (orient === 'v' && (r > rows - L || c > cols - 2)) return;
       const k = orient + r + ',' + c;
       if (!seen.has(k)) { seen.add(k); cand.push({ orient, r, c }); }
     };
@@ -106,7 +106,7 @@
     let d = dmap.get(R.key(cur.r, cur.c));
     if (d === undefined) return;
     let guard = 0;
-    while (d > 0 && guard++ < 2 * s.size * s.size) {
+    while (d > 0 && guard++ < 2 * s.rows * s.cols) {
       let nxt = null;
       for (const [dr, dc] of R.DIRS) {
         const nr = cur.r + dr, nc = cur.c + dc;
@@ -114,7 +114,7 @@
         if (dmap.get(R.key(nr, nc)) === d - 1) { nxt = { r: nr, c: nc }; break; }
       }
       if (!nxt) break;
-      pushEdgeWalls(s.size, s.wallLen || 2, cur, nxt, seen, cand);
+      pushEdgeWalls(s.rows, s.cols, s.wallLen || 2, cur, nxt, seen, cand);
       cur = nxt; d--;
     }
   }
@@ -231,8 +231,8 @@
     if (state.walls[me] > 0 && Math.random() < 0.18) {
       for (let t = 0; t < 8; t++) {
         const orient = Math.random() < 0.5 ? 'h' : 'v';
-        const r = Math.floor(Math.random() * (state.size - 1));
-        const c = Math.floor(Math.random() * (state.size - 1));
+        const r = Math.floor(Math.random() * (state.rows - 1));
+        const c = Math.floor(Math.random() * (state.cols - 1));
         if (R.canPlaceWall(state, me, orient, r, c)) return { type: 'wall', orient, r, c };
       }
     }
