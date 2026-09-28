@@ -6,7 +6,8 @@
 // qu'ils mesurent tous a cote. Une partie lue coup par coup ne peut pas mesurer a cote.
 const L = require('./lib.js'), D = require('./duel.js');
 
-const A = L.loadEngine('path/engine.js', { weights: 'path/netweights.js' });
+const AWENV = process.env.AW;
+const A = L.loadEngine('path/engine.js', { weights: AWENV === '0' ? false : (AWENV || 'path/netweights.js') });
 const B = L.loadEngine('tools/lab/variants/engine-nnue.js', { weights: process.env.NNUE || 'tools/lab/nnue_w_score.js' });
 const R = A.Rules;
 const NODES = Number(process.env.NODES || 32000);
@@ -14,7 +15,7 @@ const SEED = Number(process.env.SEED || 131);
 
 const rnd = L.rng(SEED * 7919 + Number(process.env.PAIR || 0));
 const s = D.makeOpening(A, L.startState(R), 4, rnd);
-const nom = ['LIVRE ', 'NNUE  '];
+const nom = [(process.env.ANAME || 'LIVRE ').padEnd(6).slice(0, 6), (process.env.BNAME || 'NNUE  ').padEnd(6).slice(0, 6)];
 const eng = [A, B];
 let mursA = 0, mursB = 0;
 
