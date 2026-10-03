@@ -36,9 +36,14 @@ const STOP = path.join(HERE, 'STOP');
 
 // Les sources, dans un ordre fixe: la reprise designe les lignes par leur rang global, donc cet
 // ordre fait partie du contrat. Ajouter un dossier en tete decalerait tout.
+// SRC remplace la liste par defaut. C'est ce qui permet a une deuxieme machine de noter un
+// ensemble de positions DISJOINT sans avoir a s'entendre sur une numerotation commune: deux
+// machines qui lisent des fichiers differents ne peuvent pas se marcher dessus, et la fusion se
+// fait sur le token, qui est ecrit dans chaque ligne de sortie.
+const SRC = (process.env.SRC || '').split(',').map(s => s.trim()).filter(Boolean);
 function sources() {
   const out = [];
-  for (const dir of ['data/deep', 'data/deep_lenovo', 'data/new_lenovo']) {
+  for (const dir of (SRC.length ? SRC : ['data/deep', 'data/deep_lenovo', 'data/new_lenovo'])) {
     let names = [];
     try { names = fs.readdirSync(path.resolve(HERE, dir)); } catch (e) { continue; }
     for (const n of names.sort()) if (/^pos_\d+\.csv$/.test(n)) out.push(dir + '/' + n);
@@ -139,12 +144,16 @@ console.log('(les positions ou evaluate() repond avant le reseau sont ignorees: 
 
 const per = Math.ceil(TOTAL / WORKERS);
 const kids = [];
-const stat = new Array(WORKERS).fill(0).map(() => ({ written: 0, skipped: 0, at: 0, done: false }));
+// `from` est garde par ouvrier: `at` est un rang ABSOLU, donc l'avancement d'un ouvrier s'obtient
+// en retirant le debut de sa tranche. Sommer les rangs absolus donnait un pourcentage au-dessus
+// de cent, affiche sur la page que quelqu'un regarde.
+const stat = new Array(WORKERS).fill(0).map((_, i) => ({ written: 0, skipped: 0, at: 0, from: 0, done: false }));
 const t0 = Date.now();
 
 for (let i = 0; i < WORKERS; i++) {
   const from = i * per, to = Math.min(TOTAL, (i + 1) * per);
   if (from >= to) { stat[i].done = true; continue; }
+  stat[i].from = from;
   const env = Object.assign({}, process.env, {
     SP_WORKER: '1', SP_FROM: String(from), SP_TO: String(to),
     SP_OUT: path.join(OUTDIR, `score_${from}_${to}.csv`),
@@ -155,12 +164,31 @@ for (let i = 0; i < WORKERS; i++) {
   kids.push(k);
 }
 
+// Le meme battement part aussi dans queue_status.json, que statuslib.js relit -- en local par
+// lecture de fichier, a distance par SSH. Sans lui la machine apparait "au repos" sur le tableau
+// de bord pendant qu'elle travaille, et une machine muette est indiscernable d'une machine
+// bloquee: c'est precisement la distinction que cette page existe pour montrer.
+const STATUS = path.resolve(HERE, process.env.STATUS || 'queue_status.json');
+const SINCE = new Date().toISOString();
+const JOB = process.env.LABEL || `notation ${NODES} noeuds`;
+
 const beat = setInterval(() => {
   const w = stat.reduce((a, s) => a + s.written, 0);
   const sk = stat.reduce((a, s) => a + s.skipped, 0);
+  const read = stat.reduce((a, s) => a + Math.max(0, s.at - s.from), 0);
   const h = (Date.now() - t0) / 3600000;
-  process.stderr.write(`\r${w.toLocaleString('fr')} notees, ${sk.toLocaleString('fr')} ignorees` +
-    (h > 0.01 ? `  (${Math.round(w / h).toLocaleString('fr')}/h)` : ''));
+  const rate = h > 0.01 ? `  (${Math.round(w / h).toLocaleString('fr')}/h)` : '';
+  process.stderr.write(`\r${w.toLocaleString('fr')} notees, ${sk.toLocaleString('fr')} ignorees${rate}`);
+  try {
+    fs.writeFileSync(STATUS, JSON.stringify({
+      machine: process.env.MACHINE || os.hostname(),
+      job: JOB,
+      progress: `${w.toLocaleString('fr')} notees · ${sk.toLocaleString('fr')} ignorees` +
+        `${rate} · ${WORKERS} ouvriers · ${Math.round(100 * read / Math.max(1, TOTAL))} % de la reserve`,
+      since: SINCE,
+      updated: new Date().toISOString(),
+    }, null, 1) + '\n');
+  } catch (e) { /* un battement perdu n'arrete pas le travail */ }
 }, 2000);
 
 function finish() {

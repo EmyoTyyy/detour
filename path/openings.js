@@ -70,6 +70,27 @@
       "notation": "c3h a3h f3h h3h"
     },
     {
+      "name": "Merit Opener",
+      "note": "White walks straight up to e5, right beside the black pawn. It hands Black a jump and the depth that comes with it, and buys White the initiative to shape the board first.",
+      "src": "g",
+      "line": "m74 m14 m64 m24 m54 m34 m44",
+      "notation": "e2 e8 e3 e7 e4 e6 e5"
+    },
+    {
+      "name": "Jackob Opener",
+      "note": "Black's wall goes in FRONT of their own pawn, not behind it. It stands in the way of White's march as much as their own, so White cannot answer with a straight push without losing tempo.",
+      "src": "g",
+      "line": "m74 m14 m64 m24 m54 h24",
+      "notation": "e2 e8 e3 e7 e4 e6h"
+    },
+    {
+      "name": "The Bowl",
+      "note": "Four walls make a cup around your own pawn: closed behind, walled on both flanks, open only forwards. Nothing can be dropped behind you, and the answer shown is a long wall across the third row.",
+      "src": "d",
+      "line": "m74 m14 m64 m24 m54 m34 h54 h14 h52 h12 v45 h16 v41",
+      "notation": "e2 e8 e3 e7 e4 e6 e3h e7h c3h c7h f4v g7h b4v"
+    },
+    {
       "name": "Standard Copy",
       "note": "Black answers every move of White's in the mirror, walls included.",
       "src": "q",

@@ -96,18 +96,35 @@ class Ishtar {
       this.ws.send('go');
     });
   }
-  async bestMove(state, timeoutMs) {
-    await this.connect();
-    if (this.pending) throw new Error('a search is already running');
-    const pos = serialise(state);
+  // Une tentative. La reprise est au-dessus, dans bestMove.
+  demande(pos, timeoutMs) {
     return new Promise((res, rej) => {
+      if (this.pending) return rej(new Error('a search is already running'));
       this.pending = { res, rej };
       const t = setTimeout(() => { if (this.pending) { this.pending = null; rej(new Error('timeout waiting for bestmove')); } }, timeoutMs || 120000);
-      const done = (v) => { clearTimeout(t); res(v); };
-      this.pending.res = done;
+      this.pending.res = (v) => { clearTimeout(t); res(v); };
+      this.pending.rej = (e) => { clearTimeout(t); rej(e); };
       this.ws.send(`setposition ${pos}`);
       this.ws.send('go');
     });
+  }
+  // Leur serveur ferme des connexions pendant un long match: deux tranches sur huit ont ete
+  // perdues sur "connection closed" apres plus d'une heure de jeu chacune. Reprendre est trivial
+  // ici, et c'est la difference avec Ka: `setposition` porte la position entiere, donc une
+  // connexion neuve repart exactement ou on en etait, sans rien rejouer.
+  async bestMove(state, timeoutMs, essais) {
+    const pos = serialise(state);
+    const max = essais == null ? 3 : essais;
+    for (let n = 0; ; n++) {
+      try {
+        await this.connect();
+        return await this.demande(pos, timeoutMs);
+      } catch (e) {
+        if (n >= max) throw e;
+        try { if (this.ws) this.ws.close(); } catch (x) {}
+        this.ws = null; this.ready = null; this.pending = null;
+      }
+    }
   }
   close() { if (this.ws) this.ws.close(); }
 }

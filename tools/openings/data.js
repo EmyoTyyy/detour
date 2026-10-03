@@ -23,6 +23,25 @@ module.exports = {
       note: "A wall on the very first move, channelling your own route to the far rank. e1v does the same job." },
     { name: 'Reed Opening', line: 'c3h a3h f3h h3h',
       note: "Two walls on the third row with a single gap left in the middle." },
+    // --- not from Wikipedia: played out on this board and exported from it -------------------
+    // The Bowl is not in any published list I could find; this one comes from a game of the
+    // project's own (assets/bowl_opening.json), converted move for move. The line is the whole
+    // game as it was played, because a line has to be legal to be checked -- so the opponent's
+    // answer is in it too. What makes it the Bowl is the four walls the first player lays: a cup
+    // around their own pawn, closed behind and on both flanks, open only towards the goal.
+    // --- from assets/quoridor_strategy_guide.md ------------------------------------------------
+    // The guide names four unconventional openers but describes three of them as plans ("push
+    // forward, step laterally, then place a vertical wall") rather than squares. Only these two
+    // pin down to a line: the Merit's square is given outright, and the Jackob is a wall in front
+    // of your own pawn, which leaves only which junction -- the one directly ahead of it. The
+    // other two are in the lessons as ideas instead, because inventing a line for them would mark
+    // a learner wrong for reading the same sentence differently.
+    { name: 'Merit Opener', src: 'g', line: 'e2 e8 e3 e7 e4 e6 e5',
+      note: "White walks straight up to e5, right beside the black pawn. It hands Black a jump and the depth that comes with it, and buys White the initiative to shape the board first." },
+    { name: 'Jackob Opener', src: 'g', line: 'e2 e8 e3 e7 e4 e6h',
+      note: "Black's wall goes in FRONT of their own pawn, not behind it. It stands in the way of White's march as much as their own, so White cannot answer with a straight push without losing tempo." },
+    { name: 'The Bowl', src: 'd', line: 'e2 e8 e3 e7 e4 e6 e3h e7h c3h c7h f4v g7h b4v',
+      note: "Four walls make a cup around your own pawn: closed behind, walled on both flanks, open only forwards. Nothing can be dropped behind you, and the answer shown is a long wall across the third row." },
   ],
   // --- QuoridorStrategy, "5 Quoridor openers you must know" -------------------------------------
   // The board codes are the ones published in that video's description.

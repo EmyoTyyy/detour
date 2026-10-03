@@ -8,7 +8,9 @@ const out = [];
 for (const o of D.lines) {
   const toks = o.line.split(' ').map(B.fromGlendenning);
   B.playLine(o.line.split(' '));                       // throws unless every move is legal
-  out.push({ name: o.name, note: o.note, src: 'w', line: toks.map(tok).join(' '), notation: o.line });
+  // 'w' pour Wikipedia, 'd' pour une ligne venue d'une partie jouee ici: la source est affichee
+  // sous le nom de l'ouverture, et crediter Wikipedia d'une ligne qui n'en vient pas serait faux.
+  out.push({ name: o.name, note: o.note, src: o.src || 'w', line: toks.map(tok).join(' '), notation: o.line });
 }
 for (const o of D.codes) {
   const d = B.decodeCode(o.code);

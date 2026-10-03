@@ -85,13 +85,21 @@ function readDuel() {
   } catch (e) { return null; }
 }
 
+// Le plan de travail, relu a chaque battement. Il est ecrit a la main pendant que le travail
+// avance, et c est justement pour ca qu il vit dans un fichier plutot que dans la page: la page
+// n a pas a etre rechargee pour qu une etape change d etat sous les yeux du lecteur.
+function readPlan() {
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'plan.json'), 'utf8')); }
+  catch (e) { return null; }
+}
+
 function fanout() {
   const rows = [];
   const local = S.readLocal();
   if (local) rows.push(local);
   for (const v of feeds.values()) if (v) rows.push(v);
   const duel = readDuel();
-  const payload = JSON.stringify({ at: new Date().toISOString(), duel, rows: unpack(rows.map(r => Object.assign({}, r, {
+  const payload = JSON.stringify({ at: new Date().toISOString(), plan: readPlan(), duel, rows: unpack(rows.map(r => Object.assign({}, r, {
     // A machine asked to stop is not a machine that died. Saying "bloque" about a deliberate
     // halt would train the reader to ignore the one word this page exists to say.
     state: r.halting ? 'arrete' : S.classify(r), for: S.ago(r.since), seen: S.ago(r.updated),
@@ -182,7 +190,7 @@ http.createServer(async (req, res) => {
     let rows = [];
     try { rows = unpack(await S.readAll(remotes)); } catch (e) { rows = []; }
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-    return res.end(JSON.stringify({ at: new Date().toISOString(), duel: readDuel(), rows }));
+    return res.end(JSON.stringify({ at: new Date().toISOString(), plan: readPlan(), duel: readDuel(), rows }));
   }
   fs.readFile(PAGE, (err, buf) => {
     if (err) { res.writeHead(500); return res.end('board.html introuvable'); }

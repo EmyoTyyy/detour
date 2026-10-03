@@ -77,6 +77,9 @@
     // one centre cell, so everybody is racing the same square from their own side
     if (koth) goals = pawns.map(() => ({ cell: { r: midR, c: midC } }));
     const s = {
+      // Les positions deja vues, pour la nulle par triple repetition. Une Map plutot qu'un Set:
+      // c'est le COMPTE qui decide, pas la simple presence.
+      seen: new Map(),
       rows, cols, players, innerRows, innerCols, holes, order, goals, race, koth,
       wallLen: clamp(o.wallLen != null ? o.wallLen : 2, 1, Math.min(rows, cols) - 1),
       inverted: players === 2 && !race && !koth && !!o.inverted,
@@ -95,6 +98,8 @@
 
   function cloneState(s) {
     return {
+      // Copiee, pas partagee: une variante exploree ne doit pas compter ses positions dans la partie.
+      seen: s.seen ? new Map(s.seen) : new Map(),
       rows: s.rows, cols: s.cols, players: s.players, innerRows: s.innerRows, innerCols: s.innerCols,
       holes: s.holes, order: s.order, goals: s.goals,   // immutable after creation → shared
       wallLen: s.wallLen, inverted: s.inverted, race: s.race, koth: s.koth,
@@ -288,13 +293,41 @@
     return ok;
   }
 
+  // ---- repetition ----
+  // Quoridor n'a pas de regle officielle de repetition: Gigamic n'en a jamais publie. Sans elle une
+  // position decidee peut tourner indefiniment -- le camp perdant rachete un coup de delai a chaque
+  // aller-retour, et rien ne penalise le retour sur une position deja vue. Mesure le 2026-10-03:
+  // 20 parties sur 64 contre Ishtar n'ont jamais fini, et aucune n'etait vraiment bloquee.
+  //
+  // La troisieme occurrence d'une position fait donc nulle, comme aux echecs.
+  //
+  // La cle n'a pas besoin de lister les murs: dans une partie un mur n'est jamais retire, donc deux
+  // moments ou le NOMBRE de murs est le meme ont forcement les memes murs. Restent les pions, les
+  // reserves et le trait.
+  function posKey(s) {
+    let k = '';
+    for (const p of s.pawns) k += p.r + ',' + p.c + ' ';
+    return k + '|' + s.walls.join(',') + '|' + s.turn + '|' + (s.hWalls.size + s.vWalls.size);
+  }
+  // Compte la position courante et rend true si elle vient d'etre vue pour la troisieme fois.
+  function noteRepetition(s) {
+    if (!s.seen) return false;
+    const k = posKey(s);
+    const n = (s.seen.get(k) || 0) + 1;
+    s.seen.set(k, n);
+    return n >= 3;
+  }
+
   function applyMove(s, to) {
     const p = s.turn;
     s.pawns[p] = { r: to.r, c: to.c };
     const g = s.goals[p];
     const reached = g.cell ? (to.r === g.cell.r && to.c === g.cell.c) : (g.axis === 'r' ? to.r : to.c) === g.at;
     if (reached) s.winner = s.inverted ? 1 - p : p;   // inverted is 2-player only
-    else s.turn = nextTurn(s);
+    else {
+      s.turn = nextTurn(s);
+      if (noteRepetition(s)) s.winner = 'draw';
+    }
     return s;
   }
 
@@ -304,6 +337,9 @@
     s.wallBy[orient + key(r, c)] = p;
     s.walls[p] -= 1;
     s.turn = nextTurn(s);
+    // Un mur ne peut jamais ramener a une position deja vue -- il n'en sort jamais -- mais la
+    // position compte tout de meme, sinon celle d'apres croirait etre une premiere visite.
+    noteRepetition(s);
     return s;
   }
 

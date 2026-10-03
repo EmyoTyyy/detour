@@ -21,10 +21,17 @@ const CFG = {
   AW: process.env.AW || '', BW: process.env.BW || '',
   ABITS: process.env.ABITS || '', BBITS: process.env.BBITS || '',
   NODES: Number(process.env.NODES || 500000),
+  APARITY: process.env.APARITY || null,
+  BPARITY: process.env.BPARITY || null,
   // BNODES lets the two sides have DIFFERENT budgets, which is what an equal-TIME comparison
   // is: a variant that evaluates better but runs 27.8% slower has to play 361 000 nodes against
   // 500 000 to be judged on what a player would actually experience.
   BNODES: process.env.BNODES ? Number(process.env.BNODES) : null,
+  // A budget in NODES asks "which engine is stronger for the same work". A budget in DEPTH asks
+  // a different and narrower question: "which EVALUATION is better", with the search held level.
+  // The two come apart whenever an evaluation changes how well the tree prunes -- which is
+  // exactly the case under investigation, so the second question needs its own knob.
+  DEPTH: process.env.DEPTH ? Number(process.env.DEPTH) : null,
   SEED: Number(process.env.SEED || 1),
   OPEN: process.env.OPEN === '' || process.env.OPEN == null ? null : Number(process.env.OPEN),
 };
@@ -44,6 +51,16 @@ function build() {
   A.Engine.clearTable(); B.Engine.clearTable();
   const o = { budgetMs: 1e9, maxNodes: CFG.NODES };
   const ob = { budgetMs: 1e9, maxNodes: CFG.BNODES || CFG.NODES };
+  // engine.js porte un reglage `parity: 'even'`: repondre depuis la derniere iteration PAIRE au
+  // lieu de l'impaire, qui finit sur notre propre coup et voit donc notre avance sans la reponse.
+  // Il etait dans le moteur, documente, et rien ne s'en servait -- donc rien ne l'avait mesure.
+  if (CFG.APARITY) o.parity = CFG.APARITY;
+  if (CFG.BPARITY) ob.parity = CFG.BPARITY;
+  if (CFG.DEPTH) {
+    // The node cap stays as a safety net so one pathological position cannot hang the match.
+    o.maxDepth = ob.maxDepth = CFG.DEPTH;
+    o.maxNodes = ob.maxNodes = CFG.NODES;
+  }
   return { A, B, o, ob };
 }
 
@@ -155,7 +172,7 @@ function finish() {
   process.stderr.write('\r');
   console.log(`A ${CFG.A} + ${wName(CFG.AW)}${CFG.ABITS ? ' @2^' + CFG.ABITS : ''}`);
   console.log(`B ${CFG.B} + ${wName(CFG.BW)}${CFG.BBITS ? ' @2^' + CFG.BBITS : ''}`);
-  console.log(`${CFG.NODES}${CFG.BNODES ? ' vs ' + CFG.BNODES : ''} nodes, seed ${CFG.SEED}, ${WORKERS} workers: A ${a} - B ${b} - draws ${draws} over ${games}`);
+  console.log(`${CFG.DEPTH ? 'depth ' + CFG.DEPTH + ', cap ' : ''}${CFG.NODES}${CFG.BNODES ? ' vs ' + CFG.BNODES : ''} nodes, seed ${CFG.SEED}, ${WORKERS} workers: A ${a} - B ${b} - draws ${draws} over ${games}`);
   console.log(`A scores ${(score * 100).toFixed(1)}% +/- ${D.band(r).toFixed(1)}   ${D.elo(score).toFixed(0)} Elo   (${((Date.now() - t0) / 60000).toFixed(1)}m)`);
   if (process.env.VERIFY) {
     const { A, B, o, ob } = build();

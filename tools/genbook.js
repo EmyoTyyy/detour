@@ -1,6 +1,6 @@
 // tools/genbook.js — builds book.js, the opening book for the standard 9x9 game.
 //
-//   node tools/genbook.js [plies] [msPerPosition] [maxPositions]
+//   node tools/genbook.js [plies] [msPerPosition] [maxPositions] [expand]
 //
 // Walks the opening tree, searches each position properly, and records every move that is
 // within a small win-probability margin of the best one. app.js labels those "Book move"
@@ -23,7 +23,13 @@ const PLIES = parseInt(process.argv[2] || '6', 10);
 const MS = parseInt(process.argv[3] || '1200', 10);
 const MAXPOS = parseInt(process.argv[4] || '400', 10);
 const MARGIN = 0.02;   // within 2% win probability of the best move counts as book
-const EXPAND = 3;      // how many moves to follow deeper
+// Combien de coups on suit plus loin. Reglable, et il faut le regler avec MAXPOS: walk() est en
+// PROFONDEUR D'ABORD, donc un plafond atteint en cours de route laisse un livre de travers --
+// la premiere branche fouillee a fond, les autres pas du tout. Mieux vaut un arbre complet et
+// etroit qu'un arbre large tronque. A 6 demi-coups, EXPAND=3 fait au plus 729 positions et
+// EXPAND=4 au plus 4096, moins les transpositions, qui sont nombreuses ici puisque l'ordre des
+// murs commute.
+const EXPAND = parseInt(process.argv[5] || '3', 10);
 
 const book = {};
 const seen = new Set();

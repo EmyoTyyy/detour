@@ -78,7 +78,7 @@
           <span class="bm-sub">Round-robin, pass-and-play</span>
           
         </button>
-        <button class="bm-tile" data-mode="friend" data-at="3,1,1,3">
+        <button class="bm-tile bm-sep" data-mode="friend" data-at="3,1,1,3">
           <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5l5-5M10.5 6.5l1-1a3.5 3.5 0 0 1 5 5l-1 1M13.5 17.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></svg></span>
           <span class="bm-name">Play a friend</span>
           <span class="bm-sub">Share a room code</span>
@@ -104,7 +104,7 @@
           <span class="bm-sub">Host or join a room</span>
           
         </button>
-        <button class="bm-tile" data-mode="history" data-at="4,5,1,5">
+        <button class="bm-tile bm-sep" data-mode="history" data-at="4,5,1,5">
           <span class="bm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5"/><path d="M12 8v4.4l3 1.8"/></svg></span>
           <span class="bm-name">Game history</span>
           <span class="bm-sub">Replay and review with Path</span>
@@ -193,6 +193,13 @@
             <button class="look-opt" data-look="board" data-value="checker"><span class="look-sw look-board bd-checker"><i></i><i></i><i></i><i></i></span><span class="look-label">Checker</span></button>
             <button class="look-opt" data-look="board" data-value="flat"><span class="look-sw look-board bd-flat"><i></i><i></i><i></i><i></i></span><span class="look-label">Flat</span></button>
             <button class="look-opt" data-look="board" data-value="bare"><span class="look-sw look-board bd-bare"><i></i><i></i><i></i><i></i></span><span class="look-label">Bare</span></button>
+          </div>
+        </section>
+        <section class="look-row">
+          <h3 class="look-head">Walls</h3>
+          <div class="look-opts">
+            <button class="look-opt" data-look="wallPlace" data-value="hold"><span class="look-sw look-wp"><i class="wp-rail"></i><i class="wp-arrow"></i></span><span class="look-label">Pick up</span></button>
+            <button class="look-opt" data-look="wallPlace" data-value="hover"><span class="look-sw look-wp"><i class="wp-cells"></i><i class="wp-slot"></i></span><span class="look-label">Hover</span></button>
           </div>
         </section>
         <section class="look-row">
@@ -436,9 +443,9 @@
 
         <div class="match-actions" id="match-actions">
           <button class="icon-btn" id="restart-btn" title="Restart" aria-label="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4.5h-4.5"/></svg></button>
-          <button class="icon-btn" id="board-import-btn" title="Import a game" aria-label="Import a game" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V5"/><path d="M8 9l4-4 4 4"/><path d="M4 20h16"/></svg></button>
+          <button class="icon-btn" id="board-import-btn" title="Import a game" aria-label="Import a game" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></svg></button>
+          <button class="icon-btn" id="board-export-btn" title="Export this position" aria-label="Export this position" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V5"/><path d="M8 9l4-4 4 4"/><path d="M4 20h16"/></svg></button>
           <button class="icon-btn" id="setup-btn" title="Set up a position" aria-label="Set up a position" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="2.1"/><path d="M13.5 14.5h5M13.5 17.5h5M15.5 7h5"/></svg></button>
-          <button class="icon-btn" id="board-export-btn" title="Export this position" aria-label="Export this position" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></svg></button>
           <button class="icon-btn" id="analysis-btn" title="Path engine analysis" aria-label="Toggle Path engine analysis"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16"/><path d="M7.5 15.5l3.5-4.5 3 2.5 4.5-6"/></svg></button>
           <button class="icon-btn" id="draw-btn" title="Offer a draw" aria-label="Offer a draw" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14M5 15h14"/></svg></button>
           <button class="icon-btn forfeit-btn" id="forfeit-btn" title="Resign" aria-label="Resign" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 5h10l-1.6 3.2L16 11.5H6"/></svg></button>
@@ -480,14 +487,11 @@
                 <button class="rv-toggle" id="rv-show" type="button">
                   <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></span><span>Path's move</span>
                 </button>
+                <button class="rv-toggle rv-back-game" id="rv-back-game" type="button" hidden>
+                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 0 1 0 12h-3"/></svg></span><span>Back to the game</span>
+                </button>
                 <button class="rv-toggle" id="rv-guess" type="button">
                   <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span><span>Find best move</span>
-                </button>
-                <button class="rv-toggle" id="rv-export" type="button">
-                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></svg></span><span>Export</span>
-                </button>
-                <button class="rv-toggle" id="rv-import" type="button">
-                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V5"/><path d="M8 9l4-4 4 4"/><path d="M4 20h16"/></svg></span><span>Import</span>
                 </button>
               </div>
             </div>
@@ -561,6 +565,10 @@
         </aside>
       </div>
       <div class="tray-hint" id="tray-hint">drag a wall onto the board, or click one to pick it up · Space to rotate</div>
+      <!-- The music toggle is not a move, so it sits out of the action rail entirely: bottom
+           right, no border, faint until you go looking for it. It lives inside the game
+           screen so it comes and goes with the board rather than following you to the menu. -->
+      <button class="music-fab" id="music-btn" title="Music" aria-label="Music on or off" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.6"/><circle cx="16.5" cy="16" r="2.6"/><!-- La barre qui dit coupe. Doublee: un trait large de la couleur du fond passe dessous pour      detacher l oblique des notes, sans quoi les trois se melangent a 18 px. --><line class="mf-slash mf-slash-halo" x1="3.5" y1="3.5" x2="20.5" y2="20.5"/><line class="mf-slash" x1="3.5" y1="3.5" x2="20.5" y2="20.5"/></svg></button>
     </section>
 
     <!-- Tournament setup (card) -->
@@ -577,6 +585,11 @@
 
         <h3 class="lesson-group">Positions</h3>
         <div class="lesson-list" id="lesson-drills"></div>
+
+        <!-- The written half: plans and habits, read rather than solved. They open in place
+             because there is no position to go to and no move that would mark you right. -->
+        <h3 class="lesson-group">Ideas</h3>
+        <div class="lesson-list" id="lesson-ideas"></div>
 
         <div class="history-actions">
           <button class="link-btn danger-link" id="lessons-reset" hidden>Forget my progress</button>

@@ -12,6 +12,9 @@ eval(fs.readFileSync(path.join(root, 'path/engine.js'), 'utf8'));
 const R = window.Rules, E = window.Engine;
 const B = require('../openings/build.js');
 const DRILLS = require('./drills.js');
+// Les idees ne sont pas mesurees: elles ne posent pas de question a laquelle un coup repond.
+// Elles traversent ce fichier telles quelles, et c'est ideas.js qui en est la source.
+const IDEAS = require('./ideas.js');
 
 const NODES = Number(process.env.NODES || 1500000);
 const MIN_GAP = Number(process.env.MIN_GAP || 6);
@@ -48,10 +51,17 @@ const js = `// lessons.js — the position lessons.
 // Each one was measured before it was written down: the answer is the move the engine found, and
 // a position only appears here if that move beats the second-best by at least ${MIN_GAP}% of the win.
 // \`wp\` is what the best move is worth, so a wrong answer can be priced rather than just refused.
-(typeof window !== 'undefined' ? window : self).Lessons = { drills: ${JSON.stringify(out, null, 2).split('\n').map((l, i) => i ? '' + l : l).join('\n')} };
+//
+// The ideas below are the other half of the lessons: the plans and habits from the strategy guide.
+// Nothing measures them, because no single move answers "price every wall by the steps it adds".
+// They are read rather than solved, and they come from tools/lessons/ideas.js unchanged.
+(typeof window !== 'undefined' ? window : self).Lessons = {
+  drills: ${JSON.stringify(out, null, 2).split('\n').map((l, i) => i ? '  ' + l : l).join('\n')},
+  ideas: ${JSON.stringify(IDEAS, null, 2).split('\n').map((l, i) => i ? '  ' + l : l).join('\n')},
+};
 `;
 fs.writeFileSync(path.join(root, 'path/lessons.js'), js);
 console.log('leçon               marge   reponse  vaut');
 for (const o of out) console.log(o.id.padEnd(20) + String(o.gap + '%').padStart(6) + '   ' + o.answerText.padEnd(7) + '  ' + o.wp + '%');
 if (refused.length) { console.log('\nrefusees :'); for (const r of refused) console.log('  ' + r); }
-console.log(`\n${out.length} lecons -> path/lessons.js`);
+console.log(`\n${out.length} lecons mesurees + ${IDEAS.length} idees -> path/lessons.js`);

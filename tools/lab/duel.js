@@ -7,7 +7,11 @@
 // side's work), and the table cleared at the start of each game.
 const L = require('./lib.js');
 
-function makeOpening(A, s, plies, rnd) {
+// `out`, s'il est fourni, recoit la liste des actions jouees. Ka ne sait recevoir une position
+// que rejouee depuis le debut, alors que nos ouvertures appariees arrivent sous forme d'etat.
+// Le parametre est purement additif: sans lui, pas un tirage aleatoire ne change, donc une
+// ouverture de graine donnee reste exactement la meme qu'avant -- et la meme pour Ka et Ishtar.
+function makeOpening(A, s, plies, rnd, out) {
   for (let i = 0; i < plies && s.winner == null; i++) {
     const cand = [];
     const dmap = A.Rules.distanceMap(s, s.turn);
@@ -23,7 +27,9 @@ function makeOpening(A, s, plies, rnd) {
       if (walls.length) cand.push(walls[(rnd() * walls.length) | 0]);
     }
     if (!cand.length) break;
-    L.applyAction(A.Rules, s, cand[(rnd() * cand.length) | 0]);
+    const choisi = cand[(rnd() * cand.length) | 0];
+    if (out) out.push(choisi);
+    L.applyAction(A.Rules, s, choisi);
   }
   return s;
 }
@@ -43,7 +49,11 @@ function playFrom(A, B, snap, optsFirst, optsSecond, maxPlies) {
     const mine = s.turn === first;
     const E = (mine ? A : B).Engine;
     const pos = E.fromRules(s);
-    const r = E.analyse(pos, mine ? optsFirst : optsSecond);
+    // Les positions deja vues dans CETTE partie, pour que le moteur sache qu'un troisieme passage
+    // fait nulle. Sans cela le camp qui gagne echangerait sa victoire contre un demi-point en
+    // repetant, ce qui est precisement ce que les deux faisaient pendant 300 coups.
+    const o = mine ? optsFirst : optsSecond;
+    const r = E.analyse(pos, s.seen ? Object.assign({}, o, { seen: s.seen }) : o);
     L.applyAction(A.Rules, s, E.toAction(pos, r.best));
     if (watcher) watcher(s, ply, first, false);
   }

@@ -13,6 +13,11 @@
   let T = null;            // active local tournament: { players, schedule, current }
   let OT = null;           // active online tournament (host or client context)
   let previewEl = null;    // ghost wall preview on the board grid
+  // Le coup mis en attente pendant que l'adversaire reflechit: { seat, action }. Il n'est pas
+  // envoye, il n'entre pas dans l'historique, et il est reverifie au moment de partir -- un coup
+  // legal maintenant peut devenir illegal apres le coup d'en face (le mur qu'on visait est pris,
+  // ou le pion a bouge et le saut n'existe plus).
+  let PRE = null;
   let drag = null;         // active drag-from-inventory gesture, or { locked:true } while input is frozen
   let armed = false;       // click-to-place: a wall is in hand, waiting for a junction click
   let pendingRole = null;  // 'host' | 'guest' while a room is connecting
@@ -40,9 +45,13 @@
     menu: 1, appearance: 1, history: 1, 'bot-setup': 1, online: 1, random: 1,
     'otour-entry': 1, 'otour-lobby': 1, 'tournament-setup': 1, 'tournament-standings': 1,
   };
+  const musicScreen = id => !!MUSIC_SCREENS[id] || (id === 'game' && LOOK.gameMusic === 'on');
   function showScreen(id) {
+    // Un coup en attente n'a de sens que devant le plateau de SA partie. Le garder en quittant
+    // l'ecran le ferait partir au retour, dans une position qui n'est plus la meme.
+    if (id !== 'game') PRE = null;
     $$('.screen').forEach(s => s.classList.toggle('is-active', s.id === id));
-    if (window.Music) MUSIC_SCREENS[id] ? window.Music.start() : window.Music.stop();
+    if (window.Music) musicScreen(id) ? window.Music.start() : window.Music.stop();
   }
   const openOverlay = id => $('#' + id).classList.add('is-active');
   const closeOverlay = id => $('#' + id).classList.remove('is-active');
@@ -69,6 +78,15 @@
     pawn:    { values: ['token', 'solid', 'ring', 'block'], def: 'token' },
     board:   { values: ['cells', 'checker', 'flat', 'bare'], def: 'cells' },
     sound:   { values: ['on', 'off'], def: 'on' },
+    // Music under a board was deliberately left out: you are reading a position, and a bed of
+    // pads under that is noise. It stays out by default for exactly that reason -- but it is a
+    // taste, not a fact, so it is now a switch you can reach from the board itself.
+    gameMusic: { values: ['on', 'off'], def: 'off' },
+    // Two ways to put a wall down. 'hold' is the original: take one from the rail, then click a
+    // junction. 'hover' skips the first half -- the junctions answer the pointer on their own, so
+    // moving between two cells shows the wall and a click lays it. It is off by default because
+    // live junctions sit on the corners of the squares you also click to walk.
+    wallPlace: { values: ['hold', 'hover'], def: 'hold' },
   };
   const lookDefaults = () => Object.fromEntries(Object.entries(LOOK_AXES).map(([k, a]) => [k, a.def]));
   let LOOK = lookDefaults();
@@ -97,8 +115,9 @@
       window.Music.setEnabled(LOOK.sound !== 'off');
       // turning sound back on while sitting on the menu should start it again, not wait for
       // the next screen change
-      if (LOOK.sound !== 'off' && MUSIC_SCREENS[($('.screen.is-active') || {}).id]) window.Music.start();
+      if (LOOK.sound !== 'off' && musicScreen(($('.screen.is-active') || {}).id)) window.Music.start();
     }
+    paintMusicBtn();      // turning all sound off has to grey out the music toggle too
     $$('[data-look]').forEach(b => {
       const on = LOOK[b.dataset.look] === b.dataset.value;
       b.classList.toggle('on', on);
@@ -322,22 +341,54 @@
     window.Sfx.play('click');
   });
 
+  // The one control in the rail that is not about the game: whether there is music over it.
+  // It is offered in every mode, including a review, because it answers a question you can have
+  // at any moment and the answer should never be three screens away.
+  function paintMusicBtn() {
+    const b = $('#music-btn');
+    if (!b) return;
+    const on = LOOK.gameMusic === 'on' && LOOK.sound !== 'off';
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.title = LOOK.sound === 'off' ? 'Sound is off in Appearance' : (on ? 'Music on' : 'Music off');
+    b.disabled = LOOK.sound === 'off';
+  }
+  function toggleGameMusic() {
+    if (LOOK.sound === 'off') return toast('Sound is off in Appearance');
+    setLook('gameMusic', LOOK.gameMusic === 'on' ? 'off' : 'on');
+    paintMusicBtn();
+    if (!window.Music) return;
+    const id = ($('.screen.is-active') || {}).id;
+    musicScreen(id) ? window.Music.start() : window.Music.stop();
+    if (musicScreen(id)) window.Music.retry();   // first use may be the gesture that unlocks audio
+    toast(LOOK.gameMusic === 'on' ? 'Music on' : 'Music off');
+  }
+
   function setControls() {
     const net = !!M.net;                       // friend 1v1
     const otour = M.mode === 'otour';          // online tournament
     const freeplay = M.mode === 'local';       // local hotseat 1v1
     const tournament = M.mode === 'tournament'; // local tournament
     // Resign + draw live in every competitive mode except bot games and freeplay.
-    const compete = (net && !spectating() && !waitingHost()) || tournament || (otour && M.playing);
+    // On peut abandonner partout ou le retour a disparu, sinon la partie n'aurait plus de sortie.
+    const bot2 = M.mode === 'bot' && M.state.players === 2;
+    const compete = M.state.winner === null &&
+                 ((net && !spectating() && !waitingHost()) || tournament || (otour && M.playing)
+                  || bot2 || M.mode === 'p4net');
     // Analysis is offered wherever it cannot be abused: bot games and local play, never
     // against a live opponent. Bot games otherwise have no action rail, so it has to be able
     // to bring the rail back on its own.
     if (RV.on) {
       $('#restart-btn').hidden = true; $('#forfeit-btn').hidden = true;
       $('#draw-btn').hidden = true; $('#analysis-btn').hidden = true;
-      $('#board-import-btn').hidden = true; $('#board-export-btn').hidden = true;
       $('#setup-btn').hidden = true;
-      $('#match-actions').hidden = true;
+      // Export and import are things you DO to a game, so they belong in the rail above the
+      // wall inventory with the rest of them, not buried among the review panel's view toggles.
+      $('#board-import-btn').hidden = false;
+      $('#board-export-btn').hidden = false;
+      paintMusicBtn();
+      $('#back-btn').hidden = false;      // une revision n'est pas une partie: on en sort librement
+      showActionRail();
       return;
     }
     const board = M.mode === 'board';           // analysis board: you play both sides
@@ -348,11 +399,28 @@
     $('#board-export-btn').hidden = !board;
     $('#setup-btn').hidden = !board;
     $('#setup-btn').classList.toggle('on', SU.on);
-    $('#restart-btn').hidden = !(freeplay || board);   // restart: freeplay and the board
+    // ...and the empty room, where restart means "put the sketch back how it was"
+    $('#restart-btn').hidden = !(freeplay || board || waitingHost());
+    // On a board you play both sides of, this button puts the position back -- it does not start
+    // anything, so it should not say Restart.
+    const rTitle = board ? 'Reset the board' : 'Restart';
+    $('#restart-btn').title = rTitle;
+    $('#restart-btn').setAttribute('aria-label', rTitle);
     $('#forfeit-btn').hidden = !compete;       // resign: friend + tournaments
     $('#draw-btn').hidden = !compete;          // draw:   friend + tournaments
     $('#analysis-btn').hidden = !canAnalyse || SU.on;   // engine: bot games + local play
-    $('#match-actions').hidden = !(freeplay || compete || canAnalyse || board);
+    paintMusicBtn();
+    $('#back-btn').hidden = !canLeaveFreely();
+    showActionRail();
+  }
+
+  // The music toggle used to be the one button always in this rail, so the rail was always
+  // shown. It has moved to the corner of the screen, so an empty rail is possible again (a
+  // spectator has nothing to press) -- and an empty flex row still eats its gap on the layouts
+  // that give it a grid area.
+  function showActionRail() {
+    const bar = $('#match-actions');
+    bar.hidden = !bar.querySelector('button:not([hidden])');
   }
 
   function startMatch(mode, difficulty) {
@@ -520,27 +588,162 @@
     return d ? 'Bot \u00b7 ' + d[0].toUpperCase() + d.slice(1) : 'Opponent';
   }
 
+  // Reglage d'Appearance: les jonctions repondent au survol sans qu'on ait pris un mur en main.
+  const hoverWalls = () => LOOK.wallPlace === 'hover';
   const interactive = () => {
     if (!M) return false;
-    // reviewing a finished game: the board is read-only, unless you are being asked to find
-    // the best move yourself, in which case you need to be able to play one
-    if (RV.on) return !!(RV.guess && !RV.guess.done);
+    // Reviewing a finished game: during a drill only the drill's answer may be played; the
+    // rest of the time the board is yours to try things on, which is the whole point of
+    // looking at a finished game.
+    if (RV.on) return RV.guess ? !RV.guess.done : true;
     // looking at a position already played — except on the analysis board, where playing
     // from it is the point and simply starts a new line
     if (tbActive() && M.mode !== 'board') return false;
     if (M.state.winner !== null || drag?.locked) return false;
     if (M.mode === 'otour') return M.playing && OT && OT.mySeat === M.state.turn;
     if (M.mode === 'p4net') return M.state.turn === M.mySeat;   // your seat, your turn
-    // A watcher never plays, and neither does a host whose opponent has not arrived: the board
-    // is up so the code can be shared from it, not so it can be played alone.
-    if (M.net) return M.net.connected && !M.net.spectator && !M.net.waiting && M.net.myPlayer === M.state.turn;
+    if (M.net) {
+      if (M.net.spectator) return false;
+      // Waiting for an opponent, the board is yours to push pieces around on — both sides of
+      // it, like the analysis board. An empty board you are forbidden to touch is just a
+      // picture of a game. Nothing here goes on the wire, and the position is rebuilt from the
+      // advertised one the moment somebody actually sits down.
+      if (M.net.waiting) return true;
+      return M.net.connected && M.net.myPlayer === M.state.turn;
+    }
     return M.human[M.state.turn];
   };
+
+  // Notre siege, si un coup en attente est permis en cet instant -- sinon null.
+  //
+  // La condition est "c'est notre partie et ce n'est pas notre tour". Exclus: la revue et le
+  // plateau d'analyse (on y joue librement, il n'y a rien a attendre), les lecons, le partie
+  // locale a deux sur le meme ecran (un coup en attente y serait joue POUR l'autre), le mode
+  // spectateur, et l'attente d'un adversaire. Le tournoi en ligne et le jeu a quatre passent par
+  // d'autres chemins d'application et ne sont pas couverts.
+  function premoveSeat() {
+    if (!M || RV.on || suOn() || tbActive()) return null;
+    if (M.mode === 'lesson' || M.mode === 'board' || M.mode === 'local') return null;
+    if (M.mode === 'otour' || M.mode === 'p4net') return null;
+    if (!M.state || M.state.winner !== null) return null;
+    if (M.net) {
+      if (M.net.spectator || M.net.waiting || !M.net.connected) return null;
+      return M.net.myPlayer === M.state.turn ? null : M.net.myPlayer;
+    }
+    if (!M.human) return null;
+    const mine = M.human.indexOf(true);
+    if (mine < 0 || M.human.filter(Boolean).length !== 1) return null;   // pas le fauteuil partage
+    return mine === M.state.turn ? null : mine;
+  }
+
+  // Le siege qui agit maintenant: le notre quand c'est notre tour, celui du coup en attente
+  // sinon. Partout ou le placement d'un mur lisait M.state.turn, il doit lire ceci -- sans quoi
+  // la legalite, la couleur de l'apercu et le jeton souleve appartiennent a l'adversaire.
+  function actingSeat() { const p = premoveSeat(); return p === null ? M.state.turn : p; }
+
+  const PRE_MAX = 6;                 // de quoi preparer une sequence, pas de quoi jouer sans regarder
+  const preList = () => (PRE ? PRE.list : []);
+  const preCount = () => preList().length;
+
+  // La position contre laquelle le PROCHAIN coup en attente se choisit: la position reelle avec
+  // la file deja posee dessus. Recalculee a chaque lecture plutot que gardee de cote, parce
+  // qu'un etat garde devient faux des que l'adversaire joue -- et c'est exactement le moment ou
+  // on oublierait de le rafraichir.
+  function premoveView() {
+    if (!PRE || !PRE.list.length) return M.state;
+    const v = R.cloneState(M.state);
+    for (const a of PRE.list) {
+      if (v.winner !== null) break;
+      v.turn = PRE.seat;               // la file ne contient que NOS coups; les siens sont inconnus
+      if (a.type === 'wall') R.applyWall(v, a.orient, a.r, a.c);
+      else R.applyMove(v, a.to);
+    }
+    v.turn = PRE.seat;
+    return v;
+  }
+
+  const premoveLegalIn = (st, seat, action) => action.type === 'wall'
+    ? R.canPlaceWall(st, seat, action.orient, action.r, action.c)
+    : R.legalMoves(st, seat).some(m => m.r === action.to.r && m.c === action.to.c);
+  const premoveLegalNow = (seat, action) => premoveLegalIn(M.state, seat, action);
+
+  // Un coup s'ajoute a la file. Il est juge sur la position que la file a deja produite, pas sur
+  // la position reelle: deux pas d'affilee, ou un mur apres un pas, n'auraient aucun sens
+  // autrement. Rien n'est garanti pour autant -- chaque coup est reverifie au moment de partir.
+  function premoveSet(action) {
+    const seat = premoveSeat();
+    if (seat === null) return;
+    // Recliquer le dernier coup prepare l'enleve: c'est la facon la plus courte de se corriger,
+    // et elle ne demande aucun bouton.
+    const list = preList();
+    if (list.length && premoveSame(list[list.length - 1], action)) return premovePop();
+    if (list.length >= PRE_MAX) { sfx('illegal'); return toast('That is as far ahead as you can plan'); }
+    if (!premoveLegalIn(premoveView(), seat, action)) return sfx('illegal');
+    PRE = { seat, list: list.concat([action]) };
+    if (armed) setArmed(false);
+    render();
+    premoveHint();
+  }
+
+  const premoveSame = (a, b) => a.type === b.type && (a.type === 'wall'
+    ? a.orient === b.orient && a.r === b.r && a.c === b.c
+    : a.to.r === b.to.r && a.to.c === b.to.c);
+
+  // Defaire le dernier prepare, pas toute la file: on se reprend d'un cran, et Echap repete
+  // deroule la file a l'envers.
+  function premovePop() {
+    if (!PRE) return;
+    PRE.list.pop();
+    if (!PRE.list.length) PRE = null;
+    render();
+    premoveHint();
+  }
+
+  // Couper la file a partir de l'indice i (celui-la compris).
+  function premoveCut(i) {
+    if (!PRE) return;
+    if (i <= 0) return premoveClear();
+    PRE.list = PRE.list.slice(0, i);
+    render();
+    premoveHint();
+  }
+
+  function premoveClear(quiet) {
+    if (!PRE) return;
+    PRE = null;
+    if (!quiet) { render(); premoveHint(); }
+  }
+
+  // Appele quand la position a change. Si le tour est revenu a nous et qu'un coup attendait, il
+  // part -- a condition d'etre encore legal. S'il ne l'est plus on le jette en le disant: un coup
+  // en attente qui disparait sans un mot ferait croire a un clic perdu.
+  function premoveTry() {
+    if (!PRE) return;
+    const seat = PRE.seat;
+    if (!M || !M.state || M.state.winner !== null) return premoveClear(true);
+    if (premoveSeat() !== null) return;                 // toujours pas notre tour
+    if (M.state.turn !== seat || !interactive()) return;
+    const action = PRE.list[0], rest = PRE.list.slice(1);
+    if (!premoveLegalNow(seat, action)) {
+      // Le reste de la file a ete choisi EN SUPPOSANT ce coup-la, donc il tombe avec lui. Garder
+      // la suite serait jouer une sequence dont le premier terme a disparu.
+      PRE = null;
+      sfx('illegal');
+      render();
+      return toast(rest.length ? 'Your waiting moves are no longer legal' : 'Your waiting move is no longer legal');
+    }
+    PRE = rest.length ? { seat, list: rest } : null;
+    submitAction(action);
+  }
 
   // All board input flows through here so networked moves can be routed to the host.
   function submitAction(action) {
     if (armed) setArmed(false);
-    if (RV.on) { if (RV.guess && !RV.guess.done) rvGuessSubmit(action); return; }
+    if (RV.on) {
+      if (RV.guess) { if (!RV.guess.done) rvGuessSubmit(action); return; }
+      rvBranchPlay(action);
+      return;
+    }
     if (M.mode === 'lesson') { lessonSubmit(action); return; }
     if (M.mode === 'otour') {
       if (!M.playing) return;
@@ -569,18 +772,27 @@
     (M.actions || (M.actions = [])).push(action.type === 'wall'
       ? { k: 1, o: action.orient, r: action.r, c: action.c }
       : { k: 0, r: action.to.r, c: action.to.c });
-    if (M.history) M.history.push(histEntry(s, action, actor));
+    const he = histEntry(s, action, actor);
+    if (M.history) M.history.push(he);
     if (action.type === 'wall') R.applyWall(s, action.orient, action.r, action.c);
     else R.applyMove(s, action.to);
+    markWin(he, s);
     sfx(action.type === 'wall' ? 'wall' : 'move');
     clockOnAction(actor, fromRemote, action);
     idleTouch();
-    if (M.net && !M.net.spectator && !fromRemote) { if (M.clock) action.clk = M.clock.rem[actor]; window.Net.send(action); }
+    if (M.net && !M.net.spectator && !M.net.waiting && !fromRemote) { if (M.clock) action.clk = M.clock.rem[actor]; window.Net.send(action); }
     pushSpecState({ mv: 1 });
     render();
     anWatchBrilliant((M.history ? M.history.length : 0) - 1);
-    if (s.winner !== null) return endMatch();
+    if (s.winner !== null) {
+      PRE = null;
+      if (waitingHost()) { toast('Still waiting for an opponent'); return resetWaitingBoard(); }
+      return endMatch();
+    }
     if (!M.net) maybeBot();
+    // Apres le coup d'en face, pas avant: maybeBot() ne joue pas tout de suite, donc au moment ou
+    // le bot a reellement repondu on repasse ici et c'est la que le coup en attente part.
+    premoveTry();
   }
 
   // Hard uses engine.js where engine.js applies — the standard game on any rectangular
@@ -596,7 +808,13 @@
       // The level carries its own node cap, so a weak opponent is fast without the page
       // having to shorten its clock — and the same Elo is the same opponent on any machine.
       const full = elo == null || elo >= window.Engine.ELO_MAX;
-      return Brain.analyse(s, { budgetMs: Brain.budget(700, 2500), elo: full ? undefined : elo })
+      // rootAll: la racine complete, pas seulement les candidats du filtre. Mesure le 2026-10-02:
+      // le filtre ecarte le meilleur coup dans 1,14 % des positions, et sur 745 cas releves il
+      // cachait 39 gains forces -- des parties gagnees jetees, qu'aucun temps de reflexion ne
+      // rattrape puisque le coup n'est jamais engendre. A budget en TEMPS, celui que cette
+      // fonction utilise, la racine complete ne coute rien: profondeur atteinte 11,80 contre
+      // 11,73 a 400 ms, 12,57 contre 12,58 a 700 ms, 14,08 contre 14,16 a 2500 ms.
+      return Brain.analyse(s, { budgetMs: Brain.budget(700, 2500), rootAll: true, elo: full ? undefined : elo })
         .then(r => r.bestAction || fallback())
         .catch(fallback);
     }
@@ -624,6 +842,12 @@
 
   function showWin(title, sub) {
     stopClock();
+    // Every ending comes through here, and several of them -- resigning, running out of time,
+    // an opponent who forfeits or goes silent, the draw and idle rules -- set a winner and come
+    // straight here without passing endMatch. They are games you played, so they are games you
+    // should be able to find again. recordGame is idempotent, so endMatch's own call still wins.
+    if (M && M.state && M.state.winner !== null) recordGame(M.state.winner);
+    if (M) setControls();      // la partie est finie: le retour revient, l'abandon s'en va
     $('#win-title').textContent = title;
     $('#win-sub').textContent = sub;
     statusEl.textContent = title;
@@ -670,6 +894,12 @@
   }
 
   function requestRematch() {
+    if (waitingHost()) return resetWaitingBoard();   // nobody to rematch yet; clear the sketch
+    // The analysis board has to go back through startBoard. startMatch would hand it the human
+    // seats of a bot game ([true, false]) and then call maybeBot, so pressing Restart on a board
+    // you play both sides of silently put Path in the other chair -- and lost the wall ceiling
+    // and the open analysis panel with it.
+    if (M.mode === 'board') return startBoard();
     if (M.net) return netWantRematch();          // friend games need both players to agree
     if (M.mode === 'tournament') startTournamentMatch();
     else startMatch(M.mode, M.difficulty);
@@ -719,7 +949,20 @@
       M.state.winner = 1 - loser;
       return endTournamentMatch(1 - loser);
     }
-    if (!M.net) return;
+    // Le jeu a quatre en ligne: on s'en va, et le code dit deja qu'un depart termine la partie
+    // pour tout le monde. C'est bien un abandon, il n'avait simplement pas de bouton.
+    if (M.mode === 'p4net') return leaveP4();
+    // Contre Path: abandonner, c'est perdre. Sans cette branche forfeit() ne faisait rien dans une
+    // partie contre un bot -- et le bouton etait cache -- donc retirer le retour aurait enferme le
+    // joueur dans une partie sans aucune sortie.
+    if (!M.net) {
+      const moi = M.human ? M.human.indexOf(true) : 0;
+      if (moi < 0) return;
+      stopClock();
+      M.state.winner = 1 - moi;
+      render();
+      return endMatch();
+    }
     window.Net.send({ type: 'forfeit' });
     M.state.winner = 1 - M.net.myPlayer;
     showWin('You resigned', 'You bailed on the race.');
@@ -750,6 +993,25 @@
     roomCode = null; hostOffer = null; SPECS.clear();
     showScreen('menu');
     refreshMenu();
+  }
+
+  // Quitter une partie qui compte ne doit se faire qu'en ABANDONNANT, donc le bouton retour
+  // disparait pendant ce temps. Il revient partout ou il n'y a rien a abandonner: la partie finie
+  // (partir n'est plus fuir), la revision, le plateau d'analyse, une lecon, le fauteuil partage,
+  // l'attente d'un adversaire, le spectateur -- et la partie a quatre contre des bots, ou
+  // "abandonner" ne designe personne.
+  //
+  // Le tournoi en ligne n'est pas dans la liste et c'est voulu: son bouton retour ne quitte pas la
+  // partie, il remonte au classement. On quitte le tournoi depuis le classement, pas depuis le
+  // plateau, donc il n'y a pas de porte de sortie a fermer ici.
+  function canLeaveFreely() {
+    if (!M || RV.on) return true;
+    if (!M.state || M.state.winner !== null) return true;
+    if (spectating() || waitingHost()) return true;
+    if (M.mode === 'board' || M.mode === 'lesson' || M.mode === 'local') return true;
+    if (M.mode === 'otour') return true;
+    if (M.state.players === 4 && M.mode === 'bot') return true;
+    return false;      // bot a deux, partie entre amis, tournoi local, quatre joueurs en ligne
   }
 
   function leaveMatch() {
@@ -1061,7 +1323,13 @@
       get remote() { return !!worker; },
       // how long a search may take, which is a different question on each side of the thread
       budget(onThread, offThread) { return worker ? offThread : onThread; },
+      // L'historique des positions voyage avec chaque recherche, injecte ICI et pas chez les
+      // appelants: depuis que la troisieme occurrence d'une position fait nulle, un moteur qui ne
+      // le sait pas echange une victoire prouvee contre un demi-point en repetant. Un seul endroit
+      // a retenir valait mieux que trois appelants a ne pas oublier. Une Map traverse
+      // structuredClone, donc le worker la recoit comme la recherche en ligne.
       analyse(state, opts) {
+        if (state && state.seen && state.seen.size) opts = Object.assign({}, opts, { seen: state.seen });
         if (!worker) { try { return Promise.resolve(inline(state, opts)); } catch (e) { return Promise.reject(e); } }
         const id = nextId++;
         return new Promise((resolve, reject) => {
@@ -1088,6 +1356,11 @@
   const FILES = 'abcdefghijklmnopq';   // up to 17 files (4-player board can be (15+2)=17 wide)
   const sqName = (rows, r, c) => FILES[c] + (rows - r);
   const wallName = (rows, orient, r, c) => FILES[c] + (rows - 1 - r) + orient;
+  // Chess marks the move that ends the game, and a move list without that mark is missing the
+  // one entry a reader looks for first. The notation is built before the move is applied (it
+  // needs only the board's size, which never changes), so the mark is added once the result is
+  // known. A draw is not a win and gets nothing.
+  const markWin = (e, s) => { if (e && s.winner !== null && s.winner !== 'draw') e.n += '#'; return e; };
   function histEntry(s, action, actor) {
     return action.type === 'wall'
       ? { n: wallName(s.rows, action.orient, action.r, action.c), wall: true, orient: action.orient, p: actor }
@@ -1829,7 +2102,7 @@
     if (action.type === 'wall') { if (!R.canPlaceWall(s, s.turn, action.orient, action.r, action.c)) return; R.applyWall(s, action.orient, action.r, action.c); }
     else { if (!R.legalMoves(s, s.turn).some(m => m.r === action.to.r && m.c === action.to.c)) return; R.applyMove(s, action.to); }
     if (!g.history) g.history = [];
-    g.history.push(histEntry(g.state, action, actor));
+    g.history.push(markWin(histEntry(g.state, action, actor), s));
     if (g.clock) { g.clock.rem[actor] += g.clock.bonus; g.clock.last = performance.now(); }
     g.idleAt = Date.now();
     window.Net.broadcast({ t: 'state', gi: g.gi, s: serState(s), clk: g.clock ? g.clock.rem : null, h: g.history });
@@ -2078,7 +2351,26 @@
     if (target === play) play.insertBefore(acts, $('.side-right'));
     else hud.appendChild(acts);
   }
-  if (wideGame.addEventListener) wideGame.addEventListener('change', placeActions);
+  // The code chip labels the game, and in the wide layout the thing it sits over is the right
+  // column. Pinned to the far edge of a fixed-width HUD it landed 48px off that column's centre
+  // and overhung its right edge, because the HUD and the play grid are sized independently.
+  // Putting it IN the column makes it aligned by construction rather than by arithmetic that
+  // stops being true the moment the board resizes. Narrow layout has no column, so it goes home.
+  function placeRoomChip() {
+    const chip = $('#room-chip'), hud = $('.hud'), side = $('.side-right');
+    if (!chip || !hud || !side) return;
+    const target = wideGame.matches ? side : hud;
+    if (chip.parentElement === target) return;
+    if (target === side) side.insertBefore(chip, side.firstChild);
+    else {
+      const acts = $('#match-actions');
+      hud.insertBefore(chip, acts && acts.parentElement === hud ? acts : null);
+    }
+  }
+  if (wideGame.addEventListener) {
+    wideGame.addEventListener('change', placeActions);
+    wideGame.addEventListener('change', placeRoomChip);
+  }
 
   // ---------- rendering ----------
   function gridPos(el, row, col, rowSpan = 1, colSpan = 1) {
@@ -2142,6 +2434,7 @@
     (s.fixedWalls || []).forEach(addFixedWallEl);   // neutral pre-placed walls (Debris modifier)
     s.hWalls.forEach(k => addWall(k, 'h'));
     s.vWalls.forEach(k => addWall(k, 'v'));
+    preList().forEach((a, i) => { if (a.type === 'wall') addPremoveWall(a, i); });
 
     s.pawns.forEach((p, i) => {
       const pawn = document.createElement('div');
@@ -2197,19 +2490,53 @@
           submitAction({ type: 'move', to: { r: m.r, c: m.c } });
         });
       }
+    } else if (premoveSeat() !== null) {
+      // Les cases ou NOTRE pion pourrait aller, calculees sur la position que la file a deja
+      // produite -- sans quoi un deuxieme pas prepare repartirait de la case de depart. Elles ne
+      // sont pas marquees 'movable': ce ne sont pas des coups jouables, et le reste du code (le
+      // glisser du pion, le test de visee) lit cette classe.
+      const seat = premoveSeat(), view = premoveView();
+      // Le chemin deja prepare, marque dans l'ordre. Un seul coup en attente n'a pas besoin de
+      // numero; une sequence, si, sinon on ne sait plus par ou elle passe.
+      const steps = preList().filter(a => a.type === 'move');
+      preList().forEach((a, i) => {
+        if (a.type !== 'move') return;
+        const cell = cells[a.to.r][a.to.c];
+        cell.classList.add('premove');
+        if (steps.length > 1) cell.dataset.preOrder = preList().slice(0, i + 1).filter(x => x.type === 'move').length;
+        // Recliquer une case preparee coupe la file a partir de la: avec un seul coup en attente
+        // c'est l'annulation, et avec une sequence c'est la raccourcir -- le meme geste.
+        cell.addEventListener('click', ev => { ev.stopPropagation(); premoveCut(i); });
+      });
+      // Une case deja preparee garde SON clic. A partir du deuxieme pas, la position de la file
+      // permet souvent de revenir sur une case deja choisie, et deux ecouteurs sur la meme case
+      // feraient les deux choses a la fois.
+      if (view.winner === null) for (const m of R.legalMoves(view, seat)) {
+        const cell = cells[m.r][m.c];
+        if (cell.classList.contains('premove')) continue;
+        cell.classList.add('premovable');
+        cell.addEventListener('click', () => premoveSet({ type: 'move', to: { r: m.r, c: m.c } }));
+      }
     }
 
     // the board was rebuilt from scratch, so re-apply the in-hand state (and drop it if the
     // turn moved on); with the pointer already resting on a junction, re-show its preview
-    if (armed && !interactive()) armed = false;
+    if (armed && !interactive() && premoveSeat() === null) armed = false;
     boardEl.classList.toggle('placing', armed);
+    // Mode survol: les jonctions deviennent vivantes des qu'il reste un mur a poser, sans les 64
+    // points gris du mode "mur en main" -- un damier de cibles sur un plateau ou on ne fait que
+    // passer la souris serait illisible. L'apercu suffit a dire ou le mur irait.
+    boardEl.classList.toggle('hoverwall', hoverWalls() && !suOn() && canPlaceByHover());
     boardEl.classList.toggle('setup', suOn());
     // 79 target dots at once read as 79 pieces, so they only come up once a pawn is in hand.
     // A dragged pawn does not need them: the cell under the pointer lights up on its own.
     boardEl.classList.toggle('su-hold', suOn() && SU.pick != null);
     // and they are the colour of the pawn you are holding, not always the near seat's
     boardEl.classList.toggle('su-hold-opp', suOn() && SU.pick != null && SU.pick !== meIndex());
-    if (armed) { const j = boardEl.querySelector('.wjunction:hover'); if (j) onJunctionEnter({ currentTarget: j }); }
+    if (armed || boardEl.classList.contains('hoverwall')) {
+      const j = boardEl.querySelector('.wjunction:hover');
+      if (j) onJunctionEnter({ currentTarget: j });
+    }
 
     renderRails();
     renderClocks();
@@ -2230,6 +2557,7 @@
   function syncRoomChip() {
     const chip = $('#room-chip');
     if (!chip) return;
+    placeRoomChip();
     const show = !!(M && M.mode === 'net' && !RV.on && roomCode);
     chip.hidden = !show;
     if (!show) return;
@@ -2571,6 +2899,19 @@
     }
     boardEl.appendChild(w);
   }
+  // Le mur en attente, dessine comme un mur pose mais a notre couleur et en pointille, pour
+  // qu'on voie ce qui partira sans le confondre avec un mur deja sur le plateau.
+  function addPremoveWall(a, i) {
+    const span = 2 * (M.state.wallLen || 2) - 1;
+    const w = document.createElement('div');
+    w.className = 'wall premove ' + wallColorClass(PRE.seat);
+    if (a.orient === 'h') gridPos(w, 2 * a.r + 2, 2 * a.c + 1, 1, span);
+    else gridPos(w, 2 * a.r + 1, 2 * a.c + 2, span, 1);
+    // Cliquer dessus retire ce mur-la et ceux prepares apres lui: ils ont ete choisis sur une
+    // position qui le contenait, donc les garder seuls n'aurait pas de sens.
+    w.addEventListener('click', ev => { ev.stopPropagation(); premoveCut(i); });
+    boardEl.appendChild(w);
+  }
   // pre-placed neutral wall (random-walls modifier); carries its own length
   function addFixedWallEl(wall) {
     const span = 2 * wall.len - 1;
@@ -2594,14 +2935,20 @@
     const s = M.state, bottom = meIndex(), top = 1 - bottom;
     $('#near-name').textContent = nameOf(bottom);
     $('#far-name').textContent = nameOf(top);
-    $('#near-count').textContent = s.walls[bottom];
-    $('#far-count').textContent = s.walls[top];
     // Setting up, both piles are open: a position needs walls from both sides, and waiting for
     // the turn to come round to place them would be the move-by-move business this replaces.
-    const bottomDrag = suOn() || (interactive() && bottom === s.turn);
-    const topDrag = suOn() || (interactive() && top === s.turn);  // local hotseat: the player to move drags from their own rail
-    renderWalls($('#inventory'), bottom, bottomDrag);
-    renderWalls($('#opp-inventory'), top, topDrag);
+    // And during the opponent's turn your own pile stays reachable, because that is where a wall
+    // comes from to prepare one.
+    const pre = premoveSeat();
+    const bottomDrag = suOn() || (interactive() && bottom === s.turn) || pre === bottom;
+    const topDrag = suOn() || (interactive() && top === s.turn) || pre === top;  // local hotseat: the player to move drags from their own rail
+    // The count shown is what is LEFT once the waiting walls are counted against it. Showing ten
+    // while only eight can be placed would be a lie the junction then has to tell you about.
+    const view = premoveView();
+    $('#near-count').textContent = view.walls[bottom];
+    $('#far-count').textContent = view.walls[top];
+    renderWalls($('#inventory'), bottom, bottomDrag, view.walls[bottom]);
+    renderWalls($('#opp-inventory'), top, topDrag, view.walls[top]);
     const orientLabel = M.orient === 'h' ? 'Horizontal' : 'Vertical';
     $('#orient-label').textContent = orientLabel;
     $('#orient-label-top').textContent = orientLabel;
@@ -2610,7 +2957,7 @@
     $('#rotate-btn-top').hidden = ro || !hotseat();     // p2 (top) gets their own button in hotseat
     $('#rail-top').classList.toggle('active', top === s.turn);
     $('#tray').classList.toggle('active', bottom === s.turn);
-    paintTrayHint(suOn() || ((bottomDrag || topDrag) && s.walls[s.turn] > 0));
+    paintTrayHint(suOn() || ((bottomDrag || topDrag) && view.walls[actingSeat()] > 0));
   }
   // 4-player: the top rail becomes a 4-player scoreboard; the bottom tray belongs to whoever's turn it is
   function render4pRails() {
@@ -2622,6 +2969,9 @@
     $('#rotate-btn-top').hidden = true;
     const box = $('#opp-inventory');
     box.classList.add('p4-chips');
+    // it was a wall supply a moment ago, and the supply carries a live pointer handler
+    box.classList.remove('grab');
+    box.removeEventListener('pointerdown', startDrag);
     box.innerHTML = '';
     for (const seat of s.order) {   // clockwise
       const chip = document.createElement('span');
@@ -2650,22 +3000,35 @@
       el.style.visibility = show ? 'visible' : 'hidden';
       return;
     }
+    const pre = premoveSeat() !== null;
     el.textContent = armed
-      ? 'click a junction to place · Space to rotate · Esc to cancel'
-      : 'drag a wall onto the board, or click one to pick it up · Space to rotate';
+      ? (pre ? 'click a junction to have the wall waiting · Space to rotate · Esc to cancel'
+             : 'click a junction to place · Space to rotate · Esc to cancel')
+      : (pre ? 'take a wall to prepare one while they think · Space to rotate'
+             : 'drag a wall onto the board, or click one to pick it up · Space to rotate');
     el.style.visibility = show ? 'visible' : 'hidden';
   }
 
-  function renderWalls(container, owner, draggable) {
+  // One hitbox for the whole supply, not one per wall. Every token in the row is the same wall,
+  // so asking the pointer to land on a particular 26x9 sliver of it was a precision test with no
+  // question behind it -- and on a phone it was a missed tap. The listener lives on the box; the
+  // tokens are only the picture of how many are left.
+  function renderWalls(container, owner, draggable, count) {
     const s = M.state;
+    const n = count == null ? s.walls[owner] : count;
     container.innerHTML = '';
     const color = wallColorClass(owner);
-    for (let i = 0; i < s.walls[owner]; i++) {
+    const grab = draggable && n > 0;
+    container.dataset.seat = owner;
+    container.classList.toggle('grab', grab);
+    // addEventListener with the same function, type and phase is a no-op the second time, so
+    // re-rendering the rail cannot stack handlers.
+    if (grab) container.addEventListener('pointerdown', startDrag);
+    else container.removeEventListener('pointerdown', startDrag);
+    for (let i = 0; i < n; i++) {
       const tok = document.createElement('div');
-      const inHand = armed && draggable && owner === s.turn && i === s.walls[owner] - 1;   // the one you picked up
-      tok.className = 'wtoken ' + color + (draggable ? ' grab' : '') + (draggable && M.orient === 'v' ? ' vert' : '') + (inHand ? ' armed' : '');
-      tok.dataset.seat = owner;
-      if (draggable) tok.addEventListener('pointerdown', startDrag);
+      const inHand = armed && draggable && owner === actingSeat() && i === n - 1;   // the one you picked up
+      tok.className = 'wtoken ' + color + (draggable && M.orient === 'v' ? ' vert' : '') + (inHand ? ' armed' : '');
       container.appendChild(tok);
     }
   }
@@ -2681,6 +3044,11 @@
     if (RV.on) {
       const total = rvTotal();
       const names = (RV.rec && RV.rec.names) || [];
+      if (rvExploring()) {
+        statusEl.textContent = 'Your own line · ' + RV.branch.hist.length
+          + (RV.branch.hist.length === 1 ? ' move' : ' moves') + ' on from move ' + RV.branch.base;
+        return;
+      }
       if (RV.guess) statusEl.textContent = 'Find the best move · ' + (names[s.turn] || 'Player ' + (s.turn + 1)) + ' to move';
       else if (RV.ply >= total) statusEl.textContent = 'Game review · final position';
       else if (RV.ply === 0) statusEl.textContent = 'Game review · starting position';
@@ -2706,11 +3074,29 @@
     if (s.inverted) statusEl.textContent = 'Inverted · ' + statusEl.textContent;   // reaching your edge loses
     if (s.race) statusEl.textContent = 'Race · ' + statusEl.textContent;           // same start side, one finish line
     if (s.koth) statusEl.textContent = 'Hill · ' + statusEl.textContent;           // the centre cell is the only goal
+    premoveHint();
+  }
+
+  // Le rappel qu'un coup attend. Ajoute ici ET apres un clic, parce que pendant que le bot
+  // reflechit la ligne d'etat est ecrite directement par maybeBot et updateStatus s'arrete avant
+  // d'y toucher (drag.locked) -- sans ce second appel, preparer un coup contre le bot ne se
+  // verrait nulle part.
+  // La file peut contenir plusieurs coups, donc l'etiquette se reecrit au lieu de s'ajouter
+  // une fois pour toutes: on retire celle qui est la, puis on remet celle qui convient.
+  const PRE_RE = / · \d+ moves? ready$/;
+  const preTag = n => ' · ' + n + (n > 1 ? ' moves ready' : ' move ready');
+  function premoveHint() {
+    if (!statusEl || statusEl.hidden) return;
+    const bare = statusEl.textContent.replace(PRE_RE, '');
+    const want = preCount() ? bare + preTag(preCount()) : bare;
+    if (statusEl.textContent !== want) statusEl.textContent = want;
   }
 
   // ---------- move list ----------
   // History of the game currently on screen: the live otour game being viewed, else this match.
   function currentHistory() {
+    // On a branch the list reads: the game up to where you left it, then your own moves.
+    if (RV.on && RV.branch) return RV.hist.slice(0, RV.branch.base).concat(RV.branch.hist);
     if (RV.on) return RV.hist;
     if (!M) return [];
     if (M.mode === 'otour') { const g = OT && OT.live && OT.live.get(M.view); return (g && g.history) || []; }
@@ -2731,7 +3117,7 @@
     $('#opening-name').textContent = hit.name;
     $('#opening-note').textContent = hit.note;
     const src = $('#opening-src');
-    src.textContent = hit.src === 'q' ? 'QuoridorStrategy' : 'Wikipedia';
+    src.textContent = hit.src === 'q' ? 'QuoridorStrategy' : hit.src === 'd' ? 'Played here' : 'Wikipedia';
     src.title = hit.notation ? 'Line: ' + hit.notation : (hit.code ? 'Board code: ' + hit.code : '');
   }
 
@@ -2752,7 +3138,9 @@
       row.append(no);
       for (let k = 0; k < per; k++) {
         const e = hist[i + k];
-        if (e && e.idx == null) e.idx = i + k;
+        // A branch move has no index in the game, and must never be given one: the index is
+        // what makes a move clickable, and clicking it would jump into the line it is not in.
+        if (e && e.idx == null && !e.branch) e.idx = i + k;
         row.append(e ? moveCell(e, me) : blankCell());
       }
       list.appendChild(row);
@@ -2802,9 +3190,50 @@
     return b;
   }
 
+  // An idea is read where it stands: the card opens under itself. No board and no answer to find,
+  // because there is no move that says whether you have understood "make them commit first" --
+  // and a lesson that marks you wrong on a plan teaches you to distrust the lessons.
+  function ideaCard(idea, doneSet) {
+    const id = 'i:' + idea.id;
+    const wrap = document.createElement('div');
+    wrap.className = 'lesson-idea';
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'lesson-card idea-head' + (doneSet.has(id) ? ' done' : '');
+    head.setAttribute('aria-expanded', 'false');
+    const t = document.createElement('span'); t.className = 'lesson-card-name'; t.textContent = idea.title;
+    const n = document.createElement('span'); n.className = 'lesson-card-note'; n.textContent = idea.summary;
+    head.append(t, n);
+    const body = document.createElement('div');
+    body.className = 'idea-body';
+    body.hidden = true;
+    for (const para of idea.body) {
+      const el = document.createElement('p');
+      el.textContent = para;
+      body.appendChild(el);
+    }
+    if (idea.from) {
+      const src = document.createElement('p');
+      src.className = 'idea-from';
+      src.textContent = idea.from;
+      body.appendChild(src);
+    }
+    head.addEventListener('click', () => {
+      const open = body.hidden;
+      body.hidden = !open;
+      head.setAttribute('aria-expanded', String(open));
+      wrap.classList.toggle('open', open);
+      // Read is done: there is nothing else here to get right.
+      if (open && !doneSet.has(id)) { lessonMark(id); doneSet.add(id); head.classList.add('done'); }
+      if (open) sfx('click');
+    });
+    wrap.append(head, body);
+    return wrap;
+  }
+
   function renderLessons() {
     const done = lessonsDone();
-    const ops = $('#lesson-openings'), drs = $('#lesson-drills');
+    const ops = $('#lesson-openings'), drs = $('#lesson-drills'), ids = $('#lesson-ideas');
     ops.innerHTML = ''; drs.innerHTML = '';
     const OP = window.Openings;
     if (OP) for (const o of OP.list) {
@@ -2814,6 +3243,12 @@
     const LE = window.Lessons;
     if (LE && LE.drills) for (const d of LE.drills) drs.appendChild(lessonCard('d:' + d.id, d.title, d.prompt, done));
     if (!drs.children.length) drs.innerHTML = '<p class="lesson-groupnote">None yet.</p>';
+    if (ids) {
+      ids.innerHTML = '';
+      const list = (LE && LE.ideas) || [];
+      for (const idea of list) ids.appendChild(ideaCard(idea, done));
+      if (!list.length) ids.innerHTML = '<p class="lesson-groupnote">None yet.</p>';
+    }
     $('#lessons-reset').hidden = done.size === 0;
   }
   function openLessons() { renderLessons(); showScreen('lessons'); }
@@ -3353,6 +3788,9 @@
     states: [], acts: [], hist: [],
     evals: [], verdicts: [],
     ply: 0, pending: false,
+    // A line you played out yourself from some position in the game. It hangs off `base` and
+    // never touches RV.states, so the game itself is always one click away and never edited.
+    branch: null,
     showBest: true, guess: null,
     budget: 340, me: 0, from: 'game',
   };
@@ -3418,12 +3856,45 @@
   function rvGo(ply) {
     if (!RV.on) return;
     const p = Math.max(0, Math.min(RV.states.length - 1, ply));
-    if (p === RV.ply && !RV.guess) return;
+    if (p === RV.ply && !RV.guess && !RV.branch) return;
     RV.ply = p;
     RV.guess = null;
+    RV.branch = null;        // stepping along the game is leaving your own line
     M.state = RV.states[p];
     render();
   }
+
+  // Play a move from wherever you are looking. The first one opens a branch off that ply; the
+  // rest extend it. Nothing here writes to RV.states, so "back to the game" is just dropping
+  // the branch -- there is no undo to get wrong.
+  function rvBranchPlay(action) {
+    const from = RV.branch ? RV.branch.states[RV.branch.states.length - 1] : RV.states[RV.ply];
+    if (!from || from.winner !== null) return;
+    const actor = from.turn;
+    const legal = action.type === 'wall'
+      ? R.canPlaceWall(from, actor, action.orient, action.r, action.c)
+      : R.legalMoves(from, actor).some(m => m.r === action.to.r && m.c === action.to.c);
+    if (!legal) return;
+    const next = R.cloneState(from);
+    const he = histEntry(next, action, actor);
+    if (action.type === 'wall') R.applyWall(next, action.orient, action.r, action.c);
+    else R.applyMove(next, action.to);
+    markWin(he, next);
+    he.branch = true;
+    if (!RV.branch) RV.branch = { base: RV.ply, states: [from], hist: [] };
+    RV.branch.states.push(next);
+    RV.branch.hist.push(he);
+    M.state = next;
+    if (window.Sfx) window.Sfx.play(action.type === 'wall' ? 'wall' : 'move');
+    render();
+  }
+  function rvBackToGame() {
+    if (!RV.branch) return;
+    RV.branch = null;
+    M.state = RV.states[RV.ply];
+    render();
+  }
+  const rvExploring = () => !!(RV.on && RV.branch);
 
   // analyse the ply on screen first, then backfill the rest from the start of the game
   function rvPump() {
@@ -3456,8 +3927,17 @@
     $('#analysis').hidden = true;
     $('#review-panel').hidden = false;
     $('#rv-nav').hidden = false;
-    $('#match-actions').hidden = true;
-    $('#evalbar').hidden = false;
+    $('#match-actions').hidden = false;     // it now carries review's export and import
+    // On a line of your own the board is drained and the way back appears. The eval bar and the
+    // verdicts describe the GAME at this ply, so on a branch they would be describing a position
+    // that is no longer on the board: they stand down rather than lie.
+    const off = rvExploring();
+    $('#game').classList.toggle('exploring', off);
+    $('#rv-back-game').hidden = !off;
+    $('#rotate-btn').hidden = !off || matchRandomOrient();   // placing walls again needs it back
+    $('#evalbar').hidden = off;
+    // Review brings its own scrubber; the in-game rewind bar must not sit beside it.
+    const tb = $('#tb-bar'); if (tb) tb.hidden = true;
     syncEvalClass();      // resizes the board — must land before anything reads its geometry
 
     const i = RV.ply, ev = RV.evals[i];
@@ -3732,6 +4212,8 @@
   function recordGame(winner) {
     if (!M || !M.actions || M.actions.length < 2) return;
     if (M.mode === 'board') return;     // a position you set up to study is not a game played
+    if (M.recorded) return;             // one game, one entry, however many endings call this
+    M.recorded = true;
     const s = M.state;
     const rec = {
       id: Date.now(),
@@ -3795,11 +4277,13 @@
         ? R.canPlaceWall(cur, cur.turn, action.orient, action.r, action.c)
         : R.legalMoves(cur, cur.turn).some(m => m.r === action.to.r && m.c === action.to.c);
       if (!ok) throw new Error('replay diverged at ply ' + acts.length);
-      hist.push(histEntry(cur, action, cur.turn));
+      const rhe = histEntry(cur, action, cur.turn);
+      hist.push(rhe);
       acts.push(action);
       const next = R.cloneState(cur);
       if (action.type === 'wall') R.applyWall(next, action.orient, action.r, action.c);
       else R.applyMove(next, action.to);
+      markWin(rhe, next);        // a replayed game must read exactly like the game did
       states.push(next);
       cur = next;
     }
@@ -4037,7 +4521,9 @@
   // it gets several times the budget, because the only thing capping it there was how long
   // the page may stop responding.
   function anRun(state, budget) {
-    return Brain.analyse(state, { budgetMs: budget, maxDepth: 24, exactRoot: true }).then(r => {
+    // rootAll pour la meme raison que le bot, et une de plus ici: ce panneau met une note sur le
+    // coup joue, et un coup que la recherche n'a jamais regarde n'a pas de note a comparer.
+    return Brain.analyse(state, { budgetMs: budget, maxDepth: 24, exactRoot: true, rootAll: true }).then(r => {
       const byMove = new Map();
       for (const [mv, sc] of r.moves) byMove.set(mv, sc);
       const sec = anSecond(r.moves, r.best);
@@ -4614,6 +5100,12 @@
     }
     const tx = document.createElement('span'); tx.className = 'mv-text'; tx.textContent = entry.n;
     cell.appendChild(tx);
+    if (entry.branch) {
+      cell.classList.add('mv-branch');
+      cell.title = (entry.wall ? 'Wall ' : 'Move ') + entry.n + ' \u2014 your line, not the game';
+      if (RV.branch && entry === RV.branch.hist[RV.branch.hist.length - 1]) cell.classList.add('current');
+      return cell;
+    }
     if (entry.idx != null && (RV.on || tbAllowed())) {
       // clicking a move shows the position it was played from — in review, and in a game
       // you are allowed to look back through, where it is the way in. Against a live
@@ -4645,7 +5137,7 @@
     const span = 2 * (M.state.wallLen || 2) - 1;
     if (orient === 'h') gridPos(previewEl, 2 * r + 2, 2 * c + 1, 1, span);
     else gridPos(previewEl, 2 * r + 1, 2 * c + 2, span, 1);
-    const who = wallColorClass(M.state.turn);
+    const who = wallColorClass(actingSeat());
     previewEl.className = 'preview ' + (ok ? 'ok ' + who : 'bad');
     previewEl.style.display = '';
   }
@@ -4656,7 +5148,10 @@
   // clicking a junction puts it down. Both paths share the preview and the legality check, so a
   // wall can only ever land where a drag could have dropped it.
   function setArmed(on) {
-    const next = !!on && interactive() && M.state.walls[M.state.turn] > 0;
+    // Pendant le tour de l'adversaire, prendre un mur en main sert a preparer un coup en attente.
+    const pre = premoveSeat();
+    const seat = pre === null ? M.state.turn : pre;
+    const next = !!on && (interactive() || pre !== null) && premoveView().walls[seat] > 0;
     if (next === armed) return;
     armed = next;
     if (armed && matchRandomOrient()) M.orient = Math.random() < 0.5 ? 'h' : 'v';   // rolled when you pick it up, as in a drag
@@ -4665,12 +5160,20 @@
     renderRails();
   }
   const junctionRC = el => ({ r: Number(el.dataset.r), c: Number(el.dataset.c) });
-  function onJunctionEnter(e) {
-    if (!armed || drag) return;                   // a live drag drives its own preview
-    const { r, c } = junctionRC(e.currentTarget);
-    placePreview(M.orient, r, c, R.canPlaceWall(M.state, M.state.turn, M.orient, r, c));
+  // Le survol ne peut poser un mur que la ou un mur en main pourrait l'etre: meme siege, meme
+  // reserve, meme droit de jouer. Le coup en attente compte, puisqu'il se prepare de la meme main.
+  function canPlaceByHover() {
+    if (!M || !M.state || suOn()) return false;
+    if (!interactive() && premoveSeat() === null) return false;
+    return premoveView().walls[actingSeat()] > 0;
   }
-  function onJunctionLeave() { if (armed && !drag) hidePreview(); }
+  const junctionsLive = () => armed || (hoverWalls() && canPlaceByHover());
+  function onJunctionEnter(e) {
+    if (!junctionsLive() || drag) return;         // a live drag drives its own preview
+    const { r, c } = junctionRC(e.currentTarget);
+    placePreview(M.orient, r, c, R.canPlaceWall(premoveView(), actingSeat(), M.orient, r, c));
+  }
+  function onJunctionLeave() { if (junctionsLive() && !drag) hidePreview(); }
   function onJunctionClick(e) {
     if (suOn()) {
       if (drag) return;
@@ -4680,9 +5183,10 @@
       // needs no extra control, and the turn is one click away in the panel.
       return suPlaceWall(M.orient, j.r, j.c, M.state.turn);
     }
-    if (!armed || drag) return;
+    if (!junctionsLive() || drag) return;
     e.stopPropagation();
     const { r, c } = junctionRC(e.currentTarget);
+    if (premoveSeat() !== null) return premoveSet({ type: 'wall', orient: M.orient, r, c });
     // an illegal spot keeps the wall in hand; say so, since nothing on screen changes
     if (!R.canPlaceWall(M.state, M.state.turn, M.orient, r, c)) return sfx('illegal');
     submitAction({ type: 'wall', orient: M.orient, r, c });
@@ -4690,13 +5194,15 @@
 
   // ---------- drag a wall from the inventory ----------
   function startDrag(e) {
-    if ((!interactive() && !suOn()) || drag) return;
+    // Pendant le tour de l'adversaire, le glisser sert a preparer un mur: meme geste, meme
+    // apercu, et c'est premoveSet qui le recoit a l'arrivee.
+    if ((!interactive() && !suOn() && premoveSeat() === null) || drag) return;
     e.preventDefault();
     if (matchRandomOrient()) M.orient = Math.random() < 0.5 ? 'h' : 'v';   // you don't choose — it's rolled at pickup
 
     const seat = Number(e.currentTarget.dataset.seat);
     drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, ghost: null, target: null,
-             seat: Number.isInteger(seat) ? seat : M.state.turn };
+             seat: Number.isInteger(seat) ? seat : actingSeat() };
     document.addEventListener('pointermove', onDragMove);
     document.addEventListener('pointerup', endDrag);
     document.addEventListener('pointercancel', endDrag);
@@ -4718,7 +5224,7 @@
     const L = M.state.wallLen || 2;
     const span = cell * (L + (L - 1) * 0.22);   // L cells + (L-1) gaps
     const ghost = document.createElement('div');
-    ghost.className = 'drag-ghost ' + wallColorClass(M.state.turn);
+    ghost.className = 'drag-ghost ' + wallColorClass(drag.seat != null ? drag.seat : actingSeat());
     const rot = boardRotation();                                   // the floaty ghost isn't inside the board,
     const visH = rot === 90 || rot === 270 ? M.orient === 'v' : M.orient === 'h';   // so match the on-screen axis
     ghost.style.width = (visH ? span : cell * 0.26) + 'px';
@@ -4734,7 +5240,7 @@
     const j = el && el.closest && el.closest('.wjunction');
     if (!j) { drag.target = null; hidePreview(); return; }
     const r = Number(j.dataset.r), c = Number(j.dataset.c);
-    const ok = R.canPlaceWall(M.state, drag.seat != null ? drag.seat : M.state.turn, M.orient, r, c);
+    const ok = R.canPlaceWall(premoveView(), drag.seat != null ? drag.seat : actingSeat(), M.orient, r, c);
     placePreview(M.orient, r, c, ok);
     drag.target = ok ? { r, c } : null;
   }
@@ -4756,7 +5262,11 @@
       else if (moved) sfx('illegal');
       return;
     }
-    if (moved && target) submitAction({ type: 'wall', orient: M.orient, r: target.r, c: target.c });
+    const pre = premoveSeat() !== null;
+    if (moved && target) {
+      const action = { type: 'wall', orient: M.orient, r: target.r, c: target.c };
+      pre ? premoveSet(action) : submitAction(action);
+    }
     else if (moved) sfx('illegal');      // dragged it somewhere it cannot go, and it came back
     else setArmed(!armed);               // a tap rather than a drag: take the wall in hand, or put it back
   }
@@ -4943,17 +5453,32 @@
     if (waitingHost()) return beginWaitingGame();
     startOffered();
   }
+  // Put back exactly the position that was advertised. Whatever was pushed around while the
+  // room was empty was a sketch, and a sketch must not become the game either side agreed to.
+  function resetWaitingBoard() {
+    if (!hostOffer || !M || !M.net.waiting) return;
+    const opts = modOpts(hostOffer.st);
+    if (hostOffer.fixed) opts.debris = false;
+    const st = R.createState(opts);
+    if (hostOffer.fixed) R.setFixedWalls(st, hostOffer.fixed);
+    st.turn = hostOffer.first === 1 ? 1 : 0;
+    M.state = st;
+    M.history = []; M.actions = null; M.firstTurn = undefined;
+    M.clock = setupClock(hostOffer.st);
+    TB.ply = null; TB.states = null; TB.live = null;
+    drag = null; armed = false;
+    render();
+  }
   function beginWaitingGame() {
-    M.net.waiting = false; M.net.joining = false; M.net.connected = true;
+    const p = hostOffer;
     hostOffer = null;
+    // Rebuild from the offer rather than un-pausing what is on screen: the host may have been
+    // playing with it, and the guest accepted the advertised board, not that one.
+    if (p) startNetMatch('host', 0, p.st, p.first, p.fixed);
+    else { M.net.waiting = false; M.net.joining = false; M.net.connected = true; setControls(); startClock(); render(); pushSpecState(); }
     M.idleAt = Date.now();
-    if (M.clock) M.clock.last = performance.now();
-    setControls();
-    startClock();
     sfx('notify');
     toast((netPeerName || 'Your opponent') + ' joined');
-    render();
-    pushSpecState();
   }
 
   function openJoinPreview() {
@@ -5344,8 +5869,10 @@
     if (fromId !== P4.seatId[turn]) return;   // only the seat whose turn it is
     if (action.type === 'wall') { if (!R.canPlaceWall(s, turn, action.orient, action.r, action.c)) return; }
     else { if (!R.legalMoves(s, turn).some(m => m.r === action.to.r && m.c === action.to.c)) return; }
-    P4.history.push(histEntry(s, action, turn));
+    const p4he = histEntry(s, action, turn);
+    P4.history.push(p4he);
     if (action.type === 'wall') R.applyWall(s, action.orient, action.r, action.c); else R.applyMove(s, action.to);
+    markWin(p4he, s);
     window.Net.broadcast({ t: 'p4state', s: serState(s), h: P4.history });
     if (M && M.mode === 'p4net') { M.state = s; M.history = P4.history; render(); }
     if (s.winner !== null) endMatch();
@@ -5500,10 +6027,9 @@
     rvOpen(rec, 'history');
   }));
   $('#export-btn').addEventListener('click', () => exportGame(RV.on ? RV.rec : currentRecord()));
-  $('#rv-export').addEventListener('click', () => exportGame(RV.rec || currentRecord()));
-  $('#rv-import').addEventListener('click', () => pickGameFile(rec => rvOpen(rec, RV.from || 'game')));
-  $('#board-import-btn').addEventListener('click', () => pickGameFile(rec => rvOpen(rec, 'board')));
-  $('#board-export-btn').addEventListener('click', () => exportGame(currentRecord()));
+  // One pair of buttons, two contexts: the analysis board, and a review of a finished game.
+  $('#board-import-btn').addEventListener('click', () => pickGameFile(rec => rvOpen(rec, RV.on ? (RV.from || 'game') : 'board')));
+  $('#board-export-btn').addEventListener('click', () => exportGame(RV.on ? (RV.rec || currentRecord()) : currentRecord()));
   $('#history-clear').addEventListener('click', () => {
     if (!confirm('Delete all saved games? This cannot be undone.')) return;
     clearGames(); renderHistory();
@@ -5516,6 +6042,7 @@
   $('#restart-btn').addEventListener('click', requestRematch);
   $('#analysis-btn').addEventListener('click', anToggle);
   $('#setup-btn').addEventListener('click', () => suToggle());
+  $('#music-btn').addEventListener('click', toggleGameMusic);
   $('#setup-done').addEventListener('click', () => suToggle(false));
   $('#setup-clear').addEventListener('click', suClear);
   $('#eng-best').addEventListener('click', () => { AN.showBest = !AN.showBest; render(); });
@@ -5530,6 +6057,9 @@
     if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
     if (e.key === 'ArrowLeft') { e.preventDefault(); tbStep(-1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); tbStep(1); }
+    // Un cran a la fois -- et seulement si rien n'est en main: un autre ecouteur rend le mur a la
+    // reserve sur Echap, et les deux repondaient au meme appui, ce qui defaisait deux choses.
+    else if (e.key === 'Escape' && PRE && !armed) { e.preventDefault(); premovePop(); }
     else if (e.key === 'Escape' && tbActive()) { e.preventDefault(); tbLive(); }
   });
 
@@ -5540,6 +6070,7 @@
   $('#rv-next').addEventListener('click', () => rvGo(RV.ply + 1));
   $('#rv-last').addEventListener('click', () => rvGo(RV.states.length - 1));
   $('#rv-show').addEventListener('click', () => { RV.showBest = !RV.showBest; render(); });
+  $('#rv-back-game').addEventListener('click', rvBackToGame);
   $('#rv-guess').addEventListener('click', rvGuessToggle);
   // the eval graph doubles as a scrubber
   $('#rv-graph').addEventListener('click', e => {
@@ -5550,6 +6081,7 @@
   document.addEventListener('keydown', e => {
     if (!RV.on) return;
     if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (e.key === 'Escape' && RV.branch) { e.preventDefault(); return rvBackToGame(); }
     if (e.key === 'ArrowLeft') { e.preventDefault(); rvGo(RV.ply - 1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); rvGo(RV.ply + 1); }
     else if (e.key === 'Home') { e.preventDefault(); rvGo(0); }
@@ -5583,12 +6115,14 @@
     e.preventDefault();
     setArmed(false);
   });
-  // Space toggles wall orientation while it's your turn to place
+  // Space toggles wall orientation while it's your turn to place -- and while you are preparing a
+  // wall for the turn that is coming, which is the same gesture a beat earlier.
   document.addEventListener('keydown', e => {
     if (e.code !== 'Space' && e.key !== ' ') return;
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    if (drag || !$('#game').classList.contains('is-active') || !interactive() || matchRandomOrient()) return;
+    if (drag || !$('#game').classList.contains('is-active') || matchRandomOrient()) return;
+    if (!interactive() && premoveSeat() === null) return;
     e.preventDefault();
     setOrient(M.orient === 'h' ? 'v' : 'h');
   });
@@ -5667,7 +6201,7 @@
     window.removeEventListener('pointerdown', startMusicOnFirstGesture);
     window.removeEventListener('keydown', startMusicOnFirstGesture);
     const id = ($('.screen.is-active') || {}).id;
-    if (!window.Music || LOOK.sound === 'off' || !MUSIC_SCREENS[id]) return;
+    if (!window.Music || LOOK.sound === 'off' || !musicScreen(id)) return;
     // start() for the case where nothing has tried yet, retry() for the far more common one:
     // the page loaded, something asked for music before any interaction, and the browser
     // refused. That refusal is not a verdict on the track, only on the timing.

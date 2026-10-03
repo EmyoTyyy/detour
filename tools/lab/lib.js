@@ -17,7 +17,21 @@ function loadEngine(engineFile, opts) {
   files.push(engineFile || 'path/engine.js', 'path/book.js');
   for (const f of files) {
     const p = path.isAbsolute(f) ? f : path.join(ROOT, f);
-    if (!fs.existsSync(p)) continue;
+    if (!fs.existsSync(p)) {
+      // Un fichier de poids nomme explicitement et introuvable etait IGNORE sans un mot. Le
+      // moteur se chargeait alors sans reseau, le match imprimait fierement le nom du reseau en
+      // en-tete, et les deux cotes jouaient la meme chose: 240 parties a 200 000 noeuds ont
+      // rendu "50,0 % +/- 0,0", ce qui est exactement ce qu'un moteur contre lui-meme rend. Les
+      // chemins sont relatifs a la RACINE du depot, donc un fichier de tools/lab s'ecrit
+      // "tools/lab/nnue_w_resid.js" et non "nnue_w_resid.js". Un reseau demande et absent est
+      // desormais une erreur, pas un silence.
+      if (f === o.weights) {
+        const alt = path.join(ROOT, 'tools', 'lab', f);
+        throw new Error(`poids introuvables: ${f}\n  cherche a ${p}` +
+          (fs.existsSync(alt) ? `\n  mais le fichier existe a tools/lab/${f} -- passer ce chemin-la` : ''));
+      }
+      continue;
+    }
     vm.runInContext(fs.readFileSync(p, 'utf8'), sandbox, { filename: f });
   }
   return { Rules: sandbox.Rules, Engine: sandbox.Engine, Book: sandbox.OpeningBook };

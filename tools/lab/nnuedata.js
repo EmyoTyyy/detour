@@ -68,6 +68,33 @@ function defaultFiles() {
 const FILES = (process.env.FILES ? process.env.FILES.split(/\s+/).filter(Boolean) : defaultFiles());
 if (!FILES.length) { console.error('aucun fichier'); process.exit(1); }
 
+// ---------- les scores profonds fabriques apres coup ----------
+// La derniere colonne d'un CSV de positions porte le verdict d'une longue recherche, et elle est
+// VIDE pour 92 % des lignes: noter une position coute une recherche, et les parties ont ete
+// jouees bien avant qu'on sache qu'on en aurait besoin. scorepass.js fabrique ces verdicts sans
+// rejouer les parties et les ecrit a part, un fichier par ouvrier, en `rang,token,score,coup`.
+// Le rang y designe une position dans l'ordre de lecture de scorepass, qui n'est PAS celui-ci --
+// il n'a d'ailleurs pas les memes fichiers. La jointure se fait donc sur le TOKEN, seul
+// identifiant stable des deux cotes, et un token absent d'ici est simplement ignore.
+const EXTRA = new Map();
+for (const dir of (process.env.SCORED || '').split(',').map(x => x.trim()).filter(Boolean)) {
+  const full = path.resolve(HERE, dir);
+  let names = [];
+  try { names = fs.readdirSync(full); } catch (e) { console.error('SCORED introuvable: ' + dir); continue; }
+  for (const n of names.sort()) {
+    if (!/\.csv$/.test(n)) continue;
+    const text = fs.readFileSync(path.join(full, n), 'utf8');
+    for (const line of text.split('\n')) {
+      if (!line) continue;
+      const f = line.split(',');
+      if (f.length < 3 || f[1].length !== 39) continue;
+      const v = Number(f[2]);
+      if (Number.isFinite(v)) EXTRA.set(f[1], v);
+    }
+  }
+}
+if (process.env.SCORED) console.log(`${EXTRA.size} scores profonds fabriques apres coup, lus pour jointure`);
+
 // ---------- the layout ----------
 const OFF_MY_PAWN = 0, OFF_OP_PAWN = 81, OFF_WALL_H = 162, OFF_WALL_V = 226,
       OFF_MY_HAND = 290, OFF_OP_HAND = 301, N_SPARSE = 312;
@@ -178,7 +205,7 @@ const bSc = new Int16Array(BATCH);
 const bF14 = new Float32Array(BATCH * 14);
 const bRch = new Int8Array(BATCH);
 const bHnd = new Float32Array(BATCH);
-let held = 0, total = 0, scored = 0, skipped = 0, reached = 0;
+let held = 0, total = 0, scored = 0, skipped = 0, reached = 0, joined = 0;
 const perFile = [];
 
 function flush() {
@@ -223,6 +250,14 @@ for (const rel of FILES) {
     const scoreTxt = line.slice(c2 + 1);
     if (outcome !== 0 && outcome !== 1) { skipped++; continue; }
 
+    // Le score du CSV d'abord -- c'est celui qui a ete mesure pendant la partie, au budget de la
+    // partie. La jointure ne sert qu'a remplir les trous, jamais a remplacer.
+    let scNum = scoreTxt === '' ? undefined : Number(scoreTxt);
+    if (scNum === undefined && EXTRA.size) {
+      const v = EXTRA.get(token);
+      if (v !== undefined) { scNum = v; joined++; }
+    }
+
     const pos = posFromToken(token);
     const me = pos.turn, opp = 1 - me;
     const dme = E.pathLen(pos, me), dopp = E.pathLen(pos, opp);
@@ -239,8 +274,8 @@ for (const rel of FILES) {
     const of = held * 14;
     for (let i = 0; i < 14; i++) bF14[of + i] = featBuf[i];
     bY[held] = outcome;
-    bSc[held] = scoreTxt === '' ? SC_ABSENT : Math.max(-3000, Math.min(3000, Math.round(Number(scoreTxt))));
-    if (scoreTxt !== '') scored++;
+    bSc[held] = scNum === undefined ? SC_ABSENT : Math.max(-3000, Math.min(3000, Math.round(scNum)));
+    if (scNum !== undefined) scored++;
     if (bRch[held]) reached++;
     held++; total++; rows++;
     if (held === BATCH) flush();
@@ -255,7 +290,7 @@ process.stderr.write('\r');
 for (const fd of [fdIdx, fdDns, fdY, fdSc, fdF14, fdRch, fdHnd]) fs.closeSync(fd);
 
 const meta = {
-  rows: total, scored, skipped, reached,
+  rows: total, scored, skipped, reached, joined,
   sparse: N_SPARSE, maxActive: MAX_ACTIVE, dense: N_DENSE, scAbsent: SC_ABSENT,
   layout: { myPawn: OFF_MY_PAWN, opPawn: OFF_OP_PAWN, wallH: OFF_WALL_H, wallV: OFF_WALL_V,
             myHand: OFF_MY_HAND, opHand: OFF_OP_HAND },
@@ -264,5 +299,5 @@ const meta = {
   built: new Date().toISOString(),
 };
 fs.writeFileSync(path.join(OUTDIR, 'meta.json'), JSON.stringify(meta, null, 1));
-console.log(`${total} lignes ecrites (${scored} avec un score profond, ${skipped} ignorees) en ${((Date.now() - t0) / 60000).toFixed(1)} min`);
+console.log(`${total} lignes ecrites (${scored} avec un score profond, dont ${joined} joints par token, ${skipped} ignorees) en ${((Date.now() - t0) / 60000).toFixed(1)} min`);
 console.log(`-> ${OUTDIR}`);

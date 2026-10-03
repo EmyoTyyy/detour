@@ -317,5 +317,11 @@ if vhas.sum() > 100:
 
 w = {k: v.numpy() for k, v in net.state_dict().items()}
 w['scale'] = np.array([scale], dtype=np.float32)
+# Le drapeau voyage DANS le .npz. Il y etait annonce comme voyageant avec les poids, mais
+# export_nnue.py le lisait en fait dans sa propre variable d'environnement: un export lance sur
+# une autre ligne de script, sans RESIDUAL=1, a produit un fichier marque "remplacement" alors
+# que le reseau avait appris une CORRECTION. Le moteur a alors rendu la correction comme si
+# c'etait le score entier, et rien ne l'a signale.
+w['residual'] = np.array([1 if RESIDUAL else 0], dtype=np.int8)
 np.savez(os.path.join(here, OUT), **w)
 print(f'ecrit {OUT}  ({nparam:,} parametres)')

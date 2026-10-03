@@ -16,6 +16,12 @@ tools/lab/*.log
 tools/lab/*.out
 tools/lab/*.csv
 tools/lab/*.npz
+# stderr of every run: one file per worker per experiment, named after the script that made it
+tools/lab/*.err
+# run output: node counts, lists of data files, anything a measurement printed to a file
+tools/lab/*.txt
+# fitted weights from the ordering experiments (numpy). The .js the game ships is tracked.
+tools/lab/*.npy
 # generated: mknnue.py writes variants/engine-nnue.js from path/engine.js
 tools/lab/variants/
 # exported network weights — training output, not product. path/netweights.js is the one
@@ -24,6 +30,9 @@ tools/lab/nnue_w_*.js
 tools/lab/nnue_weights.js
 tools/lab/netweights_*.js
 tools/lab/queue_status.json
+# live run dashboard, rewritten with a timestamp on every pass. The other .json in the lab
+# (night_start, regimes, qlive_*) are inputs and ARE tracked, so this one is named, not globbed.
+tools/lab/plan.json
 tools/lab/STOP
 
 # editor + stray run output

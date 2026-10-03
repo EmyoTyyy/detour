@@ -106,7 +106,16 @@ parts.append('''
 parts.append('  var W = {')
 # Le drapeau voyage avec les poids: le moteur n'a pas a deviner si ce fichier est une evaluation
 # ou une correction, et charger l'un pour l'autre serait invisible autrement.
-RESIDUAL = os.environ.get('RESIDUAL', '0') != '0'
+# Lu dans le .npz en priorite: c'est le reseau entraine qui sait s'il a appris une correction ou
+# une evaluation entiere, pas la ligne de commande qui l'exporte. RESIDUAL dans l'environnement ne
+# sert plus qu'a forcer explicitement, et un .npz muet retombe sur l'ancien defaut.
+if 'residual' in z.files:
+    RESIDUAL = bool(int(np.asarray(z['residual']).reshape(-1)[0]))
+    if 'RESIDUAL' in os.environ:
+        RESIDUAL = os.environ['RESIDUAL'] != '0'
+else:
+    RESIDUAL = os.environ.get('RESIDUAL', '0') != '0'
+print('  mode: %s' % ('CORRECTION du fait main' if RESIDUAL else 'evaluation de remplacement'))
 parts.append('    inputs: %d, hidden: %d, dense: %d, scale: %.6f, qa: %d, residual: %s,'
              % (NS, H, 4, scale, QA, 'true' if RESIDUAL else 'false'))
 parts.append("    acc: i16('%s')," % b64(qw, np.int16))

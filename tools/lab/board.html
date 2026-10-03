@@ -98,6 +98,43 @@
 
   footer { margin-top: 20px; font-size: 12px; color: var(--faint); line-height: 1.7; }
   footer code { color: var(--muted); }
+
+  /* ---- plan de travail ---- */
+  .plan-goal { font-size: 13.5px; color: var(--muted); margin-bottom: 12px; }
+  .plan-now {
+    display: flex; gap: 9px; align-items: flex-start;
+    background: rgba(78,159,255,.09); box-shadow: inset 0 0 0 1px rgba(78,159,255,.28);
+    border-radius: 9px; padding: 10px 12px; margin-bottom: 16px;
+    font-size: 13.5px; line-height: 1.45;
+  }
+  .plan-now b { color: var(--idle); font-weight: 650; flex: 0 0 auto; }
+  .step { display: flex; gap: 11px; padding: 11px 0; box-shadow: inset 0 1px 0 var(--line); }
+  .step:first-of-type { box-shadow: none; }
+  .step-mark {
+    flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; margin-top: 1px;
+    display: grid; place-items: center; font-size: 11px; font-weight: 700;
+    box-shadow: inset 0 0 0 1.5px var(--faint); color: var(--faint);
+  }
+  .step.fait .step-mark { box-shadow: inset 0 0 0 1.5px var(--ok); color: var(--ok); }
+  .step.encours .step-mark { box-shadow: inset 0 0 0 1.5px var(--warn); color: var(--warn); }
+  .step.abandonne .step-mark { box-shadow: inset 0 0 0 1.5px var(--bad); color: var(--bad); }
+  .step-body { min-width: 0; }
+  .step-head { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+  .step-title { font-weight: 600; letter-spacing: -0.01em; }
+  .step.abandonne .step-title, .step.attente .step-title { color: var(--muted); }
+  .step-state {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--faint);
+  }
+  .step.fait .step-state { color: var(--ok); }
+  .step.encours .step-state { color: var(--warn); }
+  .step.abandonne .step-state { color: var(--bad); }
+  .step-what { font-size: 13px; color: var(--muted); margin-top: 3px; }
+  .step-res { font-size: 13px; color: var(--text); margin-top: 5px; }
+  .step.attente .step-res, .step.abandonne .step-res { color: var(--muted); }
+  @media (prefers-reduced-motion: no-preference) {
+    .step.encours .step-mark { animation: beat 2s ease-in-out infinite; }
+  }
   @media (prefers-reduced-motion: no-preference) {
     .travaille .dot { animation: beat 2s ease-in-out infinite; }
     @keyframes beat { 50% { opacity: .45; } }
@@ -110,6 +147,7 @@
     <h1>Path <span>·</span> laboratoire</h1>
     <div class="when" id="when">…</div>
   </header>
+  <div id="plan"></div>
   <div id="rows"></div>
   <footer>
     Cette page lit les fichiers d'état ; la seule chose qu'elle écrit est le fichier <code>STOP</code>, et seulement si vous cliquez.<br>
@@ -320,7 +358,57 @@ function duelCard(d) {
   return el;
 }
 
+const ETAT = { fait: 'fait', encours: 'en cours', attente: 'a faire', abandonne: 'abandonne', bloque: 'bloque' };
+const MARQUE = { fait: '\u2713', encours: '\u25cf', attente: '', abandonne: '\u2717', bloque: '!' };
+
+function planCard(p) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  const top = document.createElement('div');
+  top.className = 'top';
+  const nm = document.createElement('span'); nm.className = 'name'; nm.textContent = 'Plan de travail';
+  const tag = document.createElement('span'); tag.className = 'tag';
+  const done = (p.etapes || []).filter(s => s.etat === 'fait').length;
+  tag.textContent = done + ' / ' + (p.etapes || []).length + ' faites';
+  top.append(nm, tag);
+  el.appendChild(top);
+
+  if (p.objectif) {
+    const g = document.createElement('div'); g.className = 'plan-goal'; g.textContent = p.objectif;
+    el.appendChild(g);
+  }
+  if (p.maintenant) {
+    const n = document.createElement('div'); n.className = 'plan-now';
+    const b = document.createElement('b'); b.textContent = 'En ce moment';
+    const t = document.createElement('span'); t.textContent = p.maintenant;
+    n.append(b, t);
+    el.appendChild(n);
+  }
+  for (const s of (p.etapes || [])) {
+    const row = document.createElement('div');
+    row.className = 'step ' + (s.etat || 'attente');
+    const mark = document.createElement('div'); mark.className = 'step-mark';
+    mark.textContent = MARQUE[s.etat] != null ? MARQUE[s.etat] : '';
+    if (!mark.textContent) mark.textContent = String(s.id || '');
+    const body = document.createElement('div'); body.className = 'step-body';
+    const head = document.createElement('div'); head.className = 'step-head';
+    const ti = document.createElement('span'); ti.className = 'step-title'; ti.textContent = s.titre || '';
+    const st = document.createElement('span'); st.className = 'step-state';
+    st.textContent = ETAT[s.etat] || s.etat || '';
+    head.append(ti, st);
+    body.appendChild(head);
+    if (s.quoi) { const q = document.createElement('div'); q.className = 'step-what'; q.textContent = s.quoi; body.appendChild(q); }
+    if (s.resultat) { const r = document.createElement('div'); r.className = 'step-res'; r.textContent = s.resultat; body.appendChild(r); }
+    row.append(mark, body);
+    el.appendChild(row);
+  }
+  return el;
+}
+
 function paint(data) {
+  const planBox = document.getElementById('plan');
+  planBox.innerHTML = '';
+  if (data.plan) planBox.appendChild(planCard(data.plan));
   const box = document.getElementById('rows');
   box.innerHTML = '';
   if (data.duel) box.appendChild(duelCard(data.duel));

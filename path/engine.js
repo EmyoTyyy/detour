@@ -1274,7 +1274,21 @@
   // the score is proven. It cannot change the engine's opinion of any position, cost it a
   // node, or move a score across the aspiration window — which is why it is here and not in
   // the evaluation, where the same idea measured 43.3% over 60 paired games.
-  function breakProvenTie(pos, rootMoves, bestScore, fromCell, fallback) {
+  // La meme cle que rules.js (posKey): pions, reserves, trait, nombre de murs poses. Un mur n'etant
+  // jamais retire, le NOMBRE suffit a identifier lesquels sont la. Les deux fichiers doivent
+  // s'accorder, sinon le moteur eviterait une repetition que les regles ne comptent pas.
+  function repKey(pos) {
+    const cols = pos.cols;
+    let k = '';
+    for (let i = 0; i < pos.pawn.length; i++) {
+      const cell = pos.pawn[i];
+      k += ((cell / cols) | 0) + ',' + (cell - ((cell / cols) | 0) * cols) + ' ';
+    }
+    const poses = pos.wallsEach * 2 - pos.hand[0] - pos.hand[1];
+    return k + '|' + pos.hand.join(',') + '|' + pos.turn + '|' + poses;
+  }
+
+  function breakProvenTie(pos, rootMoves, bestScore, fromCell, fallback, seen) {
     if (Math.abs(bestScore) < PROVEN) return fallback;
     const me = pos.turn, opp = 1 - me;
     const losing = bestScore < 0;
@@ -1292,8 +1306,14 @@
       tied++;
       makeMove(pos, rootMoves[i].move);
       const dme = pathLen(pos, me), dopp = pathLen(pos, opp);
+      // Depuis que la troisieme occurrence d'une position fait nulle, un coup qui y mene ne vaut
+      // plus rien pour celui qui GAGNE: il echangerait une victoire prouvee contre un demi-point.
+      // C'est la regression que la nouvelle regle apporterait sans cela -- et c'est exactement le
+      // tour que les deux camps se faisaient pendant 300 coups.
+      const troisieme = seen ? (seen.get(repKey(pos)) || 0) >= 2 : false;
       unmakeMove(pos, rootMoves[i].move, fromCell);
       if (dme < 0 || dopp < 0) continue;
+      if (troisieme && !losing) continue;   // gagnant: cette case-la mene a la nulle, on n en veut pas
       const a = losing ? dopp : -dme;      // the first thing to maximise
       const b = losing ? -dme : dopp;      // the tiebreak within it
       if (a > bestA || (a === bestA && b > bestB)) { bestA = a; bestB = b; pick = rootMoves[i].move; }
@@ -1373,15 +1393,21 @@
     if (l.noise <= 1600) return 'Knows where the goal is and little else.';
     return 'Barely picks a direction.';
   }
-  function skillPick(rootMoves, spread, fallback) {
+  function skillPick(rootMoves, spread, fallback, bestScore) {
     if (spread <= 0 || rootMoves.length < 2) return fallback;
+    // A decided position is played straight whatever the level -- and "straight" means the move
+    // breakProvenTie just chose, not a fresh scan that happens to stop on another move carrying
+    // the same score. Zeroing the noise per move was not enough: every tied move then scored
+    // identically and the first one scanned won, so the careful choice ("leave the winner
+    // furthest from home, only then walk toward your own") was computed and thrown away on
+    // every level below full strength. That is what made a lost game look like aimless
+    // shuffling -- random walls, steps backwards -- while full strength defended properly.
+    if (Math.abs(bestScore) >= PROVEN) return fallback;
     let pick = fallback, bestNoisy = -INF;
     for (let i = 0; i < rootMoves.length; i++) {
       const rm = rootMoves[i];
       if (rm.score <= -INF) continue;
-      // a proven loss is not made worse by playing on, and a proven win must not be thrown
-      // away by noise, so decided positions are played straight whatever the level
-      const noisy = rm.score + (Math.abs(rm.score) >= PROVEN ? 0 : (Math.random() * 2 - 1) * spread);
+      const noisy = rm.score + (Math.random() * 2 - 1) * spread;
       if (noisy > bestNoisy) { bestNoisy = noisy; pick = rm.move; }
     }
     return pick;
@@ -1443,9 +1469,20 @@
       rootMoves.push({ move: m, score: -INF, wins });
     };
     for (let i = 0; i < n; i++) addRoot(moveBuf[0][i]);
-    // Every legal move at the root, not just the candidates genMoves thinks are worth
-    // searching. Only a caller that has to put a number on a move it did not choose needs
-    // this; it roughly doubles the root, so playing strength never asks for it.
+    // Every legal move at the root, not just the candidates genMoves thinks are worth searching.
+    //
+    // This used to say that playing strength never asks for it. That was wrong, and measured so on
+    // 2026-10-02 without playing a single game: across 57,284 positions the candidate filter left
+    // out the move a complete root chooses in 1.14% of them, and of 745 such cases the left-out
+    // move was better 55% of the time against 26% worse -- including 39 forced wins the filter
+    // hid, against 2 the other way. A move that is never generated cannot be found by thinking
+    // longer. So the bot and the analysis panel both ask for it now.
+    //
+    // It is close to free in the unit that matters. A node budget makes it look like it costs
+    // nothing much (0.08-0.19 ply); a TIME budget is what the page actually gives the search, and
+    // there it costs nothing at all: 11.80 ply against 11.73 at 400 ms, 12.57 against 12.58 at
+    // 700 ms, 14.08 against 14.16 at 2500 ms, over 120 positions. The bigger root even completes
+    // slightly MORE nodes in the same time.
     if (o.rootAll && pos.hand[me] > 0) {
       for (let orient = 0; orient < 2; orient++)
         for (let j = 0; j < pos.JN; j++) {
@@ -1540,10 +1577,10 @@
     if (o.parity === 'even' && evenMove !== MOVE_NONE && (completed & 1) === 1 && Math.abs(bestScore) < PROVEN) {
       best = evenMove; bestScore = evenScore; completed = evenDepth; pv = evenPv;
     }
-    best = breakProvenTie(pos, rootMoves, bestScore, fromCell, best);
+    best = breakProvenTie(pos, rootMoves, bestScore, fromCell, best, o.seen);
     // The score reported is still the search's own: a weaker level plays worse, it does not
     // lie about the position. Review and the eval bar read the score, never the move.
-    best = skillPick(rootMoves, spread, best);
+    best = skillPick(rootMoves, spread, best, bestScore);
     return { best, score: bestScore, depth: completed, nodes, pv, moves: rootMoves.slice(), proven: Math.abs(bestScore) >= PROVEN };
   }
 
@@ -1554,11 +1591,15 @@
   // searching it wins nothing. Playing strength never misses it. Rating does — the move a
   // player actually chose can be exactly one of those, and a move the search never looked
   // at has no score to compare against the best one, so the review had nothing to say about
-  // it. Widening the root to every legal move (analyse's rootAll) fixes that but roughly
-  // doubles the root and costs a full ply — 8.83 to 7.75 at review's budget — to rate the
-  // occasional move. Searching just the move being asked about costs one root move in sixty
-  // and is no less accurate: against a complete-root search, moves scored this way disagreed
-  // on the verdict 3.2% of the time, versus 8.2% for moves the candidate root had all along.
+  // it. Searching just the move being asked about costs one root move in sixty and is no less
+  // accurate: against a complete-root search, moves scored this way disagreed on the verdict
+  // 3.2% of the time, versus 8.2% for moves the candidate root had all along.
+  //
+  // This note used to add that widening the root (analyse's rootAll) "costs a full ply — 8.83 to
+  // 7.75 at review's budget". That figure did not reproduce on 2026-10-02: at a time budget the
+  // cost is 0.07 ply at 2500 ms and nil below that, over 120 positions, and at a node budget
+  // 0.08-0.19 ply over five budgets. Whatever produced 8.83/7.75 was measuring something else --
+  // an older engine, or a different position set. rootAll is now on for play and for analysis.
   //
   // `depth` must be the depth analyse() reported, and the position must be the one it
   // searched, or the two numbers are not comparable. Returns null if the move is illegal
