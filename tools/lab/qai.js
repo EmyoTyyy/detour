@@ -53,10 +53,23 @@ function serialise(s) {
   return `${h.join('')} / ${v.join('')} / ${pawns} / ${left} / ${s.turn + 1}`;
 }
 
+// La probabilite de gain de celui qui joue, prise sur la premiere ligne info qui la porte.
+// `root_score` est la valeur de la racine; a defaut on prend le `score` de la variante principale,
+// qui vaut la meme chose quand les deux sont presents.
+function lireScore(infos) {
+  for (const l of (infos || [])) { const m = /root_score ([-\d.]+)/.exec(l); if (m) return Number(m[1]); }
+  for (const l of (infos || [])) { const m = /\bscore ([-\d.]+)/.exec(l); if (m) return Number(m[1]); }
+  return null;
+}
+
 class Ishtar {
   constructor(visits) {
     this.visits = visits || 3200;
     this.ws = null; this.queue = []; this.pending = null; this.lastInfo = null;
+    // Toutes les lignes `info` de la recherche en cours, pas seulement la derniere. Elles ne
+    // portent pas les memes champs: `root_score` n'apparait que sur une ligne intermediaire, et
+    // `lastInfo` seul retenait la ligne `multipv` finale, qui ne l'a pas.
+    this.infos = [];
   }
   connect() {
     if (this.ready) return this.ready;
@@ -78,7 +91,7 @@ class Ishtar {
   onMessage(line) {
     for (const part of line.split('\n')) {
       const inf = /^info (.*)$/.exec(part);
-      if (inf) { this.lastInfo = inf[1]; continue; }
+      if (inf) { this.lastInfo = inf[1]; this.infos.push(inf[1]); continue; }
       const bm = /^bestmove (.*)$/.exec(part);
       if (bm && this.pending) { const p = this.pending; this.pending = null; p.res(bm[1].trim()); }
     }
@@ -92,6 +105,10 @@ class Ishtar {
       this.pending = { res, rej };
       const t = setTimeout(() => { if (this.pending) { this.pending = null; rej(new Error('timeout waiting for bestmove')); } }, timeoutMs || 120000);
       this.pending.res = (v) => { clearTimeout(t); res(v); };
+      // Vider les lignes info, comme demande() le fait. Sans ca lireScore() rendait le PREMIER
+      // root_score de la connexion pour toutes les questions suivantes: huit positions
+      // differentes rendaient toutes le meme score, alors que le coup, lui, changeait bien.
+      this.infos = [];
       this.ws.send(`setposition ${pos}`);
       this.ws.send('go');
     });
@@ -104,6 +121,7 @@ class Ishtar {
       const t = setTimeout(() => { if (this.pending) { this.pending = null; rej(new Error('timeout waiting for bestmove')); } }, timeoutMs || 120000);
       this.pending.res = (v) => { clearTimeout(t); res(v); };
       this.pending.rej = (e) => { clearTimeout(t); rej(e); };
+      this.infos = [];
       this.ws.send(`setposition ${pos}`);
       this.ws.send('go');
     });
@@ -129,4 +147,4 @@ class Ishtar {
   close() { if (this.ws) this.ws.close(); }
 }
 
-module.exports = { Ishtar, serialise, parseMove, sq, wallSq };
+module.exports = { Ishtar, serialise, parseMove, sq, wallSq, lireScore };

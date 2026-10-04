@@ -308,7 +308,6 @@
       </button>
       <div class="online-panel">
         <h2 class="panel-title">Random match</h2>
-        <p class="panel-lead">You'll be paired with anyone else looking for a game right now — no code needed.</p>
         <div class="mm-spinner" id="mm-spinner" aria-hidden="true"></div>
         <div class="online-status" id="random-status">Looking for an opponent…</div>
         <button class="btn" id="random-cancel">Cancel</button>
@@ -455,7 +454,7 @@
           <div class="analysis" id="analysis" hidden>
             <div class="analysis-head">
               <span class="eng-brand">Path</span>
-              <span class="eng-depth" id="eng-depth">thinking…</span>
+              <span class="eng-depth" id="eng-depth"></span>
             </div>
             <div class="eng-body">
               <div class="eng-row">
@@ -482,6 +481,7 @@
             <div class="rv-body">
               <canvas class="rv-graph" id="rv-graph" width="520" height="96" aria-label="Evaluation over the game"></canvas>
               <div class="rv-verdict" id="rv-verdict" hidden></div>
+              <div class="rv-opening" id="rv-opening" hidden></div>
               <div class="rv-acc" id="rv-acc" hidden></div>
               <div class="rv-tools">
                 <button class="rv-toggle" id="rv-show" type="button">
@@ -781,7 +781,7 @@
     </div>
 
     <div id="toast" class="toast"></div>
-    <div class="version">v3.0</div>
+    <div class="version">v3.2</div>
   </main>
 
   <script src="bg.js"></script>

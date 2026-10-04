@@ -1975,6 +1975,19 @@ body::after {
 .rv-verdict .vd-name { color: var(--vc, var(--text)); }
 .rv-verdict .vd-note { font-weight: 500; color: var(--muted); font-size: 12px; }
 
+/* The opening the game is in, named for as long as it lasts. Quieter than the verdict box above
+   it: it labels the whole game, not the one move, so it must not compete with it. */
+.rv-opening {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px;
+  padding: 7px 11px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--v-book, var(--accent));
+}
+.rv-opening[hidden] { display: none; }
+.rv-op-name { font-size: 12.5px; font-weight: 700; color: var(--text); }
+.rv-op-note { font-size: 11.5px; font-weight: 500; color: var(--muted); line-height: 1.45; text-wrap: pretty; }
+
 .rv-acc { display: flex; gap: 8px; }
 .rv-acc[hidden] { display: none; }
 .rv-acc-item {

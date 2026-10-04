@@ -1,0 +1,667 @@
+{
+ "visits": 50000,
+ "lignes": [
+  {
+   "nom": "Standard Opening",
+   "src": "w",
+   "coups": 7,
+   "accord": 3,
+   "etapes": [
+    {
+     "i": 0,
+     "joue": "e2",
+     "ishtar": "e2",
+     "meme": true,
+     "score": 0.914,
+     "tour": 0
+    },
+    {
+     "i": 1,
+     "joue": "e8",
+     "ishtar": "e8",
+     "meme": true,
+     "score": 0.066,
+     "tour": 1
+    },
+    {
+     "i": 2,
+     "joue": "e3",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.329,
+     "tour": 0
+    },
+    {
+     "i": 3,
+     "joue": "e7",
+     "ishtar": "e7",
+     "meme": true,
+     "score": 0.15,
+     "tour": 1
+    },
+    {
+     "i": 4,
+     "joue": "e4",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.5,
+     "tour": 0
+    },
+    {
+     "i": 5,
+     "joue": "e6",
+     "ishtar": "e7h",
+     "meme": false,
+     "score": 0.288,
+     "tour": 1
+    },
+    {
+     "i": 6,
+     "joue": "e3v",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.604,
+     "tour": 0
+    }
+   ],
+   "apres": 0.754,
+   "tourApres": 1
+  },
+  {
+   "nom": "Shiller Opening",
+   "src": "w",
+   "coups": 7,
+   "accord": 4,
+   "etapes": [
+    {
+     "i": 0,
+     "joue": "e2",
+     "ishtar": "e2",
+     "meme": true,
+     "score": 0.94,
+     "tour": 0
+    },
+    {
+     "i": 1,
+     "joue": "e8",
+     "ishtar": "e8",
+     "meme": true,
+     "score": 0.115,
+     "tour": 1
+    },
+    {
+     "i": 2,
+     "joue": "e3",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.326,
+     "tour": 0
+    },
+    {
+     "i": 3,
+     "joue": "e7",
+     "ishtar": "e7",
+     "meme": true,
+     "score": 0.154,
+     "tour": 1
+    },
+    {
+     "i": 4,
+     "joue": "e4",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.502,
+     "tour": 0
+    },
+    {
+     "i": 5,
+     "joue": "e6",
+     "ishtar": "e6",
+     "meme": true,
+     "score": 0.163,
+     "tour": 1
+    },
+    {
+     "i": 6,
+     "joue": "c3v",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.601,
+     "tour": 0
+    }
+   ],
+   "apres": 0.678,
+   "tourApres": 1
+  },
+  {
+   "nom": "The Stonewall",
+   "src": "w",
+   "coups": 5,
+   "accord": 2,
+   "etapes": [
+    {
+     "i": 0,
+     "joue": "e2",
+     "ishtar": "h2h",
+     "meme": false,
+     "score": 0.415,
+     "tour": 0
+    },
+    {
+     "i": 1,
+     "joue": "e8",
+     "ishtar": "e8",
+     "meme": true,
+     "score": 0.106,
+     "tour": 1
+    },
+    {
+     "i": 2,
+     "joue": "e3",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.323,
+     "tour": 0
+    },
+    {
+     "i": 3,
+     "joue": "e7",
+     "ishtar": "e7",
+     "meme": true,
+     "score": 0.127,
+     "tour": 1
+    },
+    {
+     "i": 4,
+     "joue": "d2h",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.502,
+     "tour": 0
+    }
+   ],
+   "apres": 0.71,
+   "tourApres": 1
+  },
+  {
+   "nom": "Ala Opening",
+   "src": "w",
+   "coups": 7,
+   "accord": 3,
+   "etapes": [
+    {
+     "i": 0,
+     "joue": "e2",
+     "ishtar": "h2h",
+     "meme": false,
+     "score": 0.417,
+     "tour": 0
+    },
+    {
+     "i": 1,
+     "joue": "e8",
+     "ishtar": "e8",
+     "meme": true,
+     "score": 0.119,
+     "tour": 1
+    },
+    {
+     "i": 2,
+     "joue": "e3",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.323,
+     "tour": 0
+    },
+    {
+     "i": 3,
+     "joue": "e7",
+     "ishtar": "e7",
+     "meme": true,
+     "score": 0.104,
+     "tour": 1
+    },
+    {
+     "i": 4,
+     "joue": "e4",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.504,
+     "tour": 0
+    },
+    {
+     "i": 5,
+     "joue": "e6",
+     "ishtar": "e6",
+     "meme": true,
+     "score": 0.131,
+     "tour": 1
+    },
+    {
+     "i": 6,
+     "joue": "d5h",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.602,
+     "tour": 0
+    }
+   ],
+   "apres": 0.774,
+   "tourApres": 1
+  },
+  {
+   "nom": "Gap Opening",
+   "src": "w",
+   "coups": 9,
+   "accord": 4,
+   "etapes": [
+    {
+     "i": 0,
+     "joue": "e2",
+     "ishtar": "e2",
+     "meme": true,
+     "score": 0.869,
+     "tour": 0
+    },
+    {
+     "i": 1,
+     "joue": "e8",
+     "ishtar": "e8",
+     "meme": true,
+     "score": 0.224,
+     "tour": 1
+    },
+    {
+     "i": 2,
+     "joue": "e3",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.328,
+     "tour": 0
+    },
+    {
+     "i": 3,
+     "joue": "e7",
+     "ishtar": "e7",
+     "meme": true,
+     "score": 0.165,
+     "tour": 1
+    },
+    {
+     "i": 4,
+     "joue": "e4",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.494,
+     "tour": 0
+    },
+    {
+     "i": 5,
+     "joue": "e6",
+     "ishtar": "e6",
+     "meme": true,
+     "score": 0.184,
+     "tour": 1
+    },
+    {
+     "i": 6,
+     "joue": "e3v",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.603,
+     "tour": 0
+    },
+    {
+     "i": 7,
+     "joue": "e6v",
+     "ishtar": "d6h",
+     "meme": false,
+     "score": 0.757,
+     "tour": 1
+    },
+    {
+     "i": 8,
+     "joue": "g6h",
+     "ishtar": "a2h",
+     "meme": false,
+     "score": 0.526,
+     "tour": 0
+    }
+   ],
+   "apres": 0.791,
+   "tourApres": 1
+  },
+  {
+   "nom": "The Sidewall",
+   "src": "w",
+   "coups": 3,
+   "accord": 1,
+   "etapes": [
+    {
+     "i": 0,
+     "joue": "e2",
+     "ishtar": "h2h",
+     "meme": false,
+     "score": 0.405,
+     "tour": 0
+    },
+    {
+     "i": 1,
+     "joue": "e8",
+     "ishtar": "e8",
+     "meme": true,
+     "score": 0.114,
+     "tour": 1
+    },
+    {
+     "i": 2,
+     "joue": "d7v",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.329,
+     "tour": 0
+    }
+   ],
+   "apres": 0.69,
+   "tourApres": 1
+  },
+  {
+   "nom": "Shatranj Opening",
+   "src": "w",
+   "coups": 1,
+   "accord": 0,
+   "etapes": [
+    {
+     "i": 0,
+     "joue": "d1v",
+     "ishtar": "h2h",
+     "meme": false,
+     "score": 0.41,
+     "tour": 0
+    }
+   ],
+   "apres": 0.714,
+   "tourApres": 1
+  },
+  {
+   "nom": "Reed Opening",
+   "src": "w",
+   "coups": 4,
+   "accord": 0,
+   "etapes": [
+    {
+     "i": 0,
+     "joue": "c3h",
+     "ishtar": "h2h",
+     "meme": false,
+     "score": 0.415,
+     "tour": 0
+    },
+    {
+     "i": 1,
+     "joue": "a3h",
+     "ishtar": "h7h",
+     "meme": false,
+     "score": 0.679,
+     "tour": 1
+    },
+    {
+     "i": 2,
+     "joue": "f3h",
+     "ishtar": "e2",
+     "meme": false,
+     "score": 0.607,
+     "tour": 0
+    },
+    {
+     "i": 3,
+     "joue": "h3h",
+     "ishtar": "e8",
+     "meme": false,
+     "score": 0.465,
+     "tour": 1
+    }
+   ],
+   "apres": 0.854,
+   "tourApres": 0
+  },
+  {
+   "nom": "Merit Opener",
+   "src": "g",
+   "coups": 7,
+   "accord": 3,
+   "etapes": [
+    {
+     "i": 0,
+     "joue": "e2",
+     "ishtar": "h2h",
+     "meme": false,
+     "score": 0.409,
+     "tour": 0
+    },
+    {
+     "i": 1,
+     "joue": "e8",
+     "ishtar": "e8",
+     "meme": true,
+     "score": 0.121,
+     "tour": 1
+    },
+    {
+     "i": 2,
+     "joue": "e3",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.325,
+     "tour": 0
+    },
+    {
+     "i": 3,
+     "joue": "e7",
+     "ishtar": "e7",
+     "meme": true,
+     "score": 0.138,
+     "tour": 1
+    },
+    {
+     "i": 4,
+     "joue": "e4",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.509,
+     "tour": 0
+    },
+    {
+     "i": 5,
+     "joue": "e6",
+     "ishtar": "e6",
+     "meme": true,
+     "score": 0.158,
+     "tour": 1
+    },
+    {
+     "i": 6,
+     "joue": "e5",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.598,
+     "tour": 0
+    }
+   ],
+   "apres": 0.724,
+   "tourApres": 1
+  },
+  {
+   "nom": "Jackob Opener",
+   "src": "g",
+   "coups": 6,
+   "accord": 2,
+   "etapes": [
+    {
+     "i": 0,
+     "joue": "e2",
+     "ishtar": "h2h",
+     "meme": false,
+     "score": 0.411,
+     "tour": 0
+    },
+    {
+     "i": 1,
+     "joue": "e8",
+     "ishtar": "e8",
+     "meme": true,
+     "score": 0.11,
+     "tour": 1
+    },
+    {
+     "i": 2,
+     "joue": "e3",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.325,
+     "tour": 0
+    },
+    {
+     "i": 3,
+     "joue": "e7",
+     "ishtar": "e7",
+     "meme": true,
+     "score": 0.17,
+     "tour": 1
+    },
+    {
+     "i": 4,
+     "joue": "e4",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.497,
+     "tour": 0
+    },
+    {
+     "i": 5,
+     "joue": "e6h",
+     "ishtar": "e7h",
+     "meme": false,
+     "score": 0.233,
+     "tour": 1
+    }
+   ],
+   "apres": 0.814,
+   "tourApres": 0
+  },
+  {
+   "nom": "The Bowl",
+   "src": "d",
+   "coups": 13,
+   "accord": 3,
+   "etapes": [
+    {
+     "i": 0,
+     "joue": "e2",
+     "ishtar": "h2h",
+     "meme": false,
+     "score": 0.415,
+     "tour": 0
+    },
+    {
+     "i": 1,
+     "joue": "e8",
+     "ishtar": "e8",
+     "meme": true,
+     "score": 0.103,
+     "tour": 1
+    },
+    {
+     "i": 2,
+     "joue": "e3",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.324,
+     "tour": 0
+    },
+    {
+     "i": 3,
+     "joue": "e7",
+     "ishtar": "e7",
+     "meme": true,
+     "score": 0.154,
+     "tour": 1
+    },
+    {
+     "i": 4,
+     "joue": "e4",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.501,
+     "tour": 0
+    },
+    {
+     "i": 5,
+     "joue": "e6",
+     "ishtar": "e6",
+     "meme": true,
+     "score": 0.152,
+     "tour": 1
+    },
+    {
+     "i": 6,
+     "joue": "e3h",
+     "ishtar": "f2h",
+     "meme": false,
+     "score": 0.598,
+     "tour": 0
+    },
+    {
+     "i": 7,
+     "joue": "e7h",
+     "ishtar": "f6h",
+     "meme": false,
+     "score": 0.574,
+     "tour": 1
+    },
+    {
+     "i": 8,
+     "joue": "c3h",
+     "ishtar": "e5",
+     "meme": false,
+     "score": 0.681,
+     "tour": 0
+    },
+    {
+     "i": 9,
+     "joue": "c7h",
+     "ishtar": "a7h",
+     "meme": false,
+     "score": 0.369,
+     "tour": 1
+    },
+    {
+     "i": 10,
+     "joue": "f4v",
+     "ishtar": "f4",
+     "meme": false,
+     "score": 0.656,
+     "tour": 0
+    },
+    {
+     "i": 11,
+     "joue": "g7h",
+     "ishtar": "d8v",
+     "meme": false,
+     "score": 0.804,
+     "tour": 1
+    },
+    {
+     "i": 12,
+     "joue": "b4v",
+     "ishtar": "a3h",
+     "meme": false,
+     "score": 0.166,
+     "tour": 0
+    }
+   ],
+   "apres": 0.86,
+   "tourApres": 1
+  }
+ ]
+}

@@ -1289,19 +1289,32 @@
   const Brain = (() => {
     let worker = null, nextId = 1;
     const waiting = new Map();
+    const flux = new Map();
     try {
       worker = new Worker('path/engine-worker.js');
       worker.onmessage = ev => {
-        const w = waiting.get(ev.data.id);
+        const d = ev.data;
+        // Une recherche diffusee envoie un message par profondeur, puis un dernier pour dire
+        // qu'elle a fini. Elle n'est donc pas dans `waiting`, qui ne sert qu'aux recherches
+        // rendues en une fois.
+        const fl = flux.get(d.id);
+        if (fl) {
+          if (d.fini) { flux.delete(d.id); fl.fin && fl.fin(d.why); return; }
+          if (d.ok) fl.iter(d); else { flux.delete(d.id); fl.err && fl.err(new Error(d.err)); }
+          return;
+        }
+        const w = waiting.get(d.id);
         if (!w) return;
-        waiting.delete(ev.data.id);
-        if (ev.data.ok) w.resolve(ev.data); else w.reject(new Error(ev.data.err));
+        waiting.delete(d.id);
+        if (d.ok) w.resolve(d); else w.reject(new Error(d.err));
       };
       // a worker that fails to start must not take the engine with it
       worker.onerror = () => {
         worker = null;
         for (const w of waiting.values()) w.reject(new Error('worker failed'));
         waiting.clear();
+        for (const f of flux.values()) f.err && f.err(new Error('worker failed'));
+        flux.clear();
       };
     } catch (e) { worker = null; }
 
@@ -1336,6 +1349,50 @@
           waiting.set(id, { resolve, reject });
           worker.postMessage({ id, snap: R.serState(state), opts });
         }).catch(() => inline(state, opts));   // a broken worker is a slow search, not a dead one
+      },
+      // Une recherche qui REND COMPTE au fur et a mesure: `onIter` est appele a chaque
+      // profondeur terminee, avec la meme forme que `analyse` rend en une fois. Rend une
+      // fonction qui arrete la recherche.
+      //
+      // Sans worker (page ouverte en file://) il n'y a pas de flux possible: la recherche occupe
+      // le seul fil qui pourrait redessiner, donc rien ne s'afficherait avant la fin de toute
+      // facon. On fait alors une seule recherche et on l'annonce comme une unique profondeur.
+      stream(state, opts, onIter, onEnd) {
+        if (state && state.seen && state.seen.size) opts = Object.assign({}, opts, { seen: state.seen });
+        // Sans worker (page ouverte en file://, ou le navigateur refuse d'en creer un) on diffuse
+        // quand meme, par tranches COURTES sur le fil principal: 180 ms, puis on rend la main au
+        // navigateur pour qu'il redessine. C'est le meme escalier que dans le worker, avec des
+        // tranches plus petites parce qu'ici chaque tranche gele la page.
+        //
+        // Sans cela une page en file:// retombait sur UNE seule recherche: pas de profondeur qui
+        // monte, pas de fleche qui bouge -- exactement ce que le mode worker etait cense corriger.
+        if (!worker) {
+          let vivant = true, d = 1, annoncee = 0;
+          const jusqua = opts && opts.maxDepth != null ? opts.maxDepth : 40;
+          const pas = () => {
+            if (!vivant) return;
+            let r = null;
+            try { r = inline(state, Object.assign({}, opts, { maxDepth: d, budgetMs: 180 })); }
+            catch (e) { if (onEnd) onEnd('depth'); return; }   // une recherche ratee n'est pas une panne
+            if (!vivant) return;
+            if (r.depth > annoncee) { annoncee = r.depth; try { onIter(r); } catch (e) {} }
+            if (d >= jusqua || r.proven || r.tablebase) {
+              if (onEnd) onEnd(r.tablebase ? 'solved' : r.proven ? 'proven' : 'depth');
+              return;
+            }
+            if (r.depth >= d) d++;
+            setTimeout(pas, 0);
+          };
+          setTimeout(pas, 0);
+          return () => { vivant = false; };
+        }
+        const id = nextId++;
+        flux.set(id, { iter: onIter, fin: onEnd, err: () => {} });
+        worker.postMessage({ type: 'stream', id, snap: R.serState(state), opts });
+        return () => {
+          flux.delete(id);
+          if (worker) worker.postMessage({ type: 'stop' });
+        };
       },
     };
   })();
@@ -3792,7 +3849,9 @@
     // never touches RV.states, so the game itself is always one click away and never edited.
     branch: null,
     showBest: true, guess: null,
-    budget: 340, me: 0, from: 'game',
+    // La recherche continue: quelle position elle suit, comment l'arreter, et si elle a fini.
+    streamPly: -1, stopStream: null, streamDone: false, streamWhy: null,
+    me: 0, from: 'game',
   };
 
   const rvTotal = () => RV.acts.length;
@@ -3824,7 +3883,8 @@
     closeOverlay('overlay');
     RV.on = true; RV.rec = rec;
     RV.states = built.states; RV.acts = built.acts; RV.hist = built.hist;
-    RV.evals = []; RV.verdicts = [];
+    RV.evals = []; RV.verdicts = []; RV.opening = undefined;
+    rvStopStream();
     RV.ply = 0; RV.pending = false; RV.showBest = true; RV.guess = null;
     RV.me = rec.me || 0;
     RV.from = from || 'game';
@@ -3849,7 +3909,8 @@
 
   function rvClose() {
     RV.on = false; RV.rec = null; RV.states = []; RV.acts = []; RV.hist = [];
-    RV.evals = []; RV.verdicts = []; RV.guess = null;
+    RV.evals = []; RV.verdicts = []; RV.guess = null; RV.opening = undefined;
+    rvStopStream();
     if (M) M.review = false;
   }
 
@@ -3897,11 +3958,75 @@
   const rvExploring = () => !!(RV.on && RV.branch);
 
   // analyse the ply on screen first, then backfill the rest from the start of the game
+  // La revue ne s'arrete plus sur un budget fixe: elle reprend la position regardee avec un budget
+  // double a chaque passage, et la fleche (ou le mur fantome) change des qu'elle trouve mieux.
+  // Plus on reste sur une position, meilleur est le coup montre.
+  //
+  // Deux raisons, et la seconde est une correction. Un budget fixe de 1020 ms notait les coups du
+  // bot de niveau 3200, qui joue a 2500 ms sans plafond de noeuds: la revue voyait deux demi-coups
+  // de MOINS que le joueur qu'elle corrigeait, et appelait "imprecision" ce qu'elle n'avait pas pu
+  // voir. Un premier passage court garde la fleche immediate, les suivants depassent largement le
+  // budget du joueur.
+  // La position REGARDEE est cherchee en continu, et la recherche rend compte a chaque profondeur:
+  // profondeur 1, la fleche apparait; profondeur 2, elle change si le moteur a trouve mieux; et
+  // ainsi de suite sans jamais s'arreter d'elle-meme. Rien n'est jamais affiche vide en attendant.
+  //
+  // Les deux versions d'avant etaient fausses et le sont restees: la premiere attendait un budget
+  // fixe avant de montrer quoi que ce soit, la seconde relancait des recherches de plus en plus
+  // longues mais par echelons comptes, si bien que la profondeur plafonnait et n'avancait plus.
+  // Ici c'est le moteur lui-meme qui annonce chaque profondeur (Brain.stream), donc il n'y a plus
+  // ni attente initiale ni plafond.
+  //
+  // Le reste de la partie garde une seule recherche courte par position: le graphe et les
+  // pourcentages de precision en ont besoin partout, et ils n'ont pas besoin d'etre profonds.
+  const RV_FIRST = 220;
+
+  // Lancer, ou relancer, la recherche continue sur la position affichee. Ne redemarre que si la
+  // position a CHANGE: render() passe par ici a chaque profondeur recue, et redemarrer a chaque
+  // fois remettrait la recherche a zero indefiniment.
+  function rvEnsureStream() {
+    if (!RV.on) return;
+    if (!anEngine() || !anEngine().supports(RV.states[0])) return;
+    if (RV.streamPly === RV.ply) return;
+    if (RV.stopStream) { RV.stopStream(); RV.stopStream = null; }
+    RV.streamPly = RV.ply;
+    RV.streamDone = false; RV.streamWhy = null;
+    const i = RV.ply, st = RV.states[i];
+    // Une partie finie n'a pas de coup a chercher.
+    if (!st || st.winner !== null) { RV.evals[i] = AN_NONE; RV.streamDone = true; return; }
+    // Plus loin que la recherche en une fois: celle-ci n'a pas de limite de temps, donc son seul
+    // frein doit etre une profondeur qu'on n'atteint pas en pratique.
+    RV.stopStream = Brain.stream(st, Object.assign({}, AN_OPTS, { maxDepth: 40 }), (r) => {
+      if (!RV.on || RV.ply !== i) return;
+      const ev = anPack(st, r);
+      // Garde-fou cote page: ne jamais remplacer un resultat par un moins profond.
+      const prev = RV.evals[i];
+      if (prev && !prev.none && prev.depth != null && ev.depth != null && ev.depth < prev.depth) return;
+      RV.evals[i] = ev;
+      if (RV.acts[i]) RV.verdicts[i] = rvOpeningMark(anClassify(RV.evals[i], RV.acts[i]), i);
+      render();                      // redessine la fleche, le mur fantome et le panneau
+    }, (why) => {
+      if (!RV.on || RV.ply !== i) return;
+      RV.streamDone = true; RV.streamWhy = why || 'depth'; rvPanel();
+    });
+  }
+
+  function rvStopStream() {
+    if (RV.stopStream) { RV.stopStream(); RV.stopStream = null; }
+    RV.streamPly = -1; RV.streamDone = false; RV.streamWhy = null;
+  }
+
+  // Le premier passage sur le reste de la partie, une recherche courte par position.
   function rvPump() {
+    rvEnsureStream();
     if (!RV.on || RV.pending) return;
     if (!anEngine() || !anEngine().supports(RV.states[0])) return;
     let target = -1;
-    if (!RV.evals[RV.ply]) target = RV.ply;
+    // La position d'AVANT celle qu'on regarde passe devant: c'est son evaluation qui donne le
+    // verdict du coup affiche. Sans cette priorite, le panneau restait sur "Analysing..." le temps
+    // que le premier passage arrive jusque-la -- il est plus lent depuis qu'il partage le worker
+    // avec la recherche continue.
+    if (RV.ply > 0 && !RV.evals[RV.ply - 1]) target = RV.ply - 1;
     else for (let i = 0; i < RV.states.length; i++) if (!RV.evals[i]) { target = i; break; }
     if (target < 0) return;
     RV.pending = true;
@@ -3909,15 +4034,17 @@
       const done = () => {
         RV.pending = false;
         if (!RV.on) return;
-        if (target === RV.ply) render();          // redraws the board overlays too
-        else { rvPanel(); renderMoves(); rvPump(); }
+        rvPanel(); renderMoves(); rvPump();
       };
       const st = RV.states[target];
       if (!st || st.winner !== null) { RV.evals[target] = AN_NONE; return done(); }
-      anRun(st, Brain.budget(RV.budget, RV.budget * 3)).then(ev => {
+      anRun(st, Brain.budget(RV_FIRST, RV_FIRST * 3)).then(ev => {
+        // La recherche continue sur la position regardee est plus profonde que celle-ci: elle ne
+        // doit pas etre ecrasee par le premier passage qui arrive apres elle.
+        if (target === RV.ply && RV.evals[target] && !RV.evals[target].none) return;
         RV.evals[target] = ev;
-        if (ev && !ev.none && RV.acts[target]) RV.verdicts[target] = anClassify(ev, RV.acts[target]);
-      }, () => { RV.evals[target] = AN_NONE; }).then(done);
+        if (ev && !ev.none && RV.acts[target]) RV.verdicts[target] = rvOpeningMark(anClassify(ev, RV.acts[target]), target);
+      }, () => { if (!RV.evals[target]) RV.evals[target] = AN_NONE; }).then(done);
     }, 16);
   }
 
@@ -3979,9 +4106,33 @@
     let analysed = 0;
     for (let i = 0; i < RV.states.length; i++) if (RV.evals[i]) analysed++;
     const supported = anEngine() && anEngine().supports(RV.states[0]);
+    // "review complete" etait faux des que la recherche continuait a creuser la position
+    // regardee, et c'est justement ce qu'on veut voir: la profondeur qui monte.
+    const evHere = RV.evals[RV.ply];
+    // Uniquement la position affichee: c'est SA profondeur qui est ecrite a cote. En regardant
+    // aussi celle d'avant, le panneau annoncait "thinking" alors que le coup montre, lui, etait
+    // deja fini de calculer.
+    const digging = !RV.streamDone && RV.streamPly === RV.ply;
+    const dHere = evHere && evHere.depth ? evHere.depth : 0;
+    // La profondeur de la position regardee passe devant le pourcentage: c'est elle qu'on
+    // surveille. Le premier passage sur le reste de la partie se dit a cote quand il tourne
+    // encore -- l'afficher SEUL cachait la profondeur pendant tout le debut.
+    const pass = analysed < RV.states.length
+      ? ' \u00b7 ' + Math.round(analysed / RV.states.length * 100) + '%' : '';
+    // Quand la recherche s'arrete parce que le resultat est PROUVE (ou lu dans une table de
+    // finales), il faut le dire: sinon "depth 10" fige a l'ecran ressemble a un calcul en panne,
+    // alors qu'il n'y a simplement plus rien a trouver.
+    // Prouve: il n'y a plus rien a chercher, et la profondeur n'a plus de sens a cote (le gain se
+    // lit dans la table a profondeur 1). On ne l'affiche donc pas.
+    const why = RV.streamPly === RV.ply && RV.streamDone ? RV.streamWhy : null;
+    const settled = why === 'proven' || why === 'solved'
+      || (evHere && !evHere.none && (evHere.proven || evHere.solved));
     $('#rv-progress').textContent = !supported ? 'engine n/a for this variant'
-      : analysed >= RV.states.length ? 'review complete'
-      : 'analysing ' + Math.round(analysed / RV.states.length * 100) + '%';
+      : settled ? ((why === 'solved' || (evHere && evHere.solved)) ? 'solved' : 'proven') + pass
+      : digging && dHere ? 'depth ' + dHere + pass
+      : dHere ? 'depth ' + dHere + pass
+      : analysed < RV.states.length ? 'analysing ' + Math.round(analysed / RV.states.length * 100) + '%'
+      : 'review complete';
     $('#rv-show').classList.toggle('on', RV.showBest);
     $('#rv-guess').classList.toggle('on', !!RV.guess);
     $('#rv-show').disabled = !supported;
@@ -3989,6 +4140,7 @@
 
     rvEvalBar();
     rvVerdictBox();
+    rvOpeningPanel();
     rvAccuracy();
     rvGraph();
   }
@@ -4019,6 +4171,64 @@
     fill.style.height = (wp * 100).toFixed(1) + '%';
     bar.classList.toggle('proven', !!ev.proven);
     num.textContent = ev.proven ? provenLabel(E, ev, wp > 0.5) : Math.round(wp * 100) + '%';
+  }
+
+  // The named openings are a different file from OpeningBook, and a different kind of thing.
+  // OpeningBook is generated from Path's own search; these are the lines Wikipedia and the
+  // QuoridorStrategy channel publish. A move inside one of them is a move a human source
+  // recommends, so review labels it rather than grading it — and now says WHICH opening it is.
+  //
+  // Recognised from the POSITION reached, never from a name picked in advance. Openings.match
+  // looks at the moves played so far and the board they produced, so a game that answers one
+  // opening with a different one is reported as whatever it actually became, and a line nobody
+  // has a name for simply does not match.
+  // Asked ONCE for the whole game, not per move, and that is the whole subtlety. Openings.match
+  // only reports a line once every one of its moves has been played — a Wikipedia line is matched
+  // as a prefix of the game, so four moves of a seven-move line match nothing. Asking per move
+  // therefore labelled only the move that COMPLETED the line and left the six before it graded as
+  // ordinary moves. So the game's opening is settled first, by scanning every position for the
+  // deepest line that fits, and then every move inside that line is a book move.
+  //
+  // The scan has to run per position, not just on the final one: the lines from Wikipedia are
+  // matched on the move sequence, but the QuoridorStrategy entries are matched on the POSITION,
+  // and that position only exists partway through the game.
+  function rvGameOpening() {
+    if (RV.opening !== undefined) return RV.opening;
+    const OP = window.Openings;
+    RV.opening = null;
+    if (OP && RV.acts && RV.acts.length) {
+      let best = null;
+      for (let k = 1; k <= RV.acts.length; k++) {
+        const op = OP.match(RV.acts.slice(0, k), RV.states[k]);
+        if (op && (!best || op.depth > best.depth)) best = op;
+      }
+      RV.opening = best;
+    }
+    return RV.opening;
+  }
+  function rvOpeningMark(vd, i) {
+    if (!vd) return vd;
+    const op = rvGameOpening();
+    // `depth` is how many moves the named line is long, so moves 0..depth-1 are its moves.
+    if (op && i < op.depth) { vd.key = 'book'; vd.opening = op.name; vd.openingNote = op.note; }
+    return vd;
+  }
+  // The opening this game is, named for the rest of the review once it is recognised — it
+  // describes the game, not the one move on screen. Nothing is claimed at the starting position,
+  // where no move has been played yet.
+  function rvOpeningPanel() {
+    const el = $('#rv-opening');
+    if (!el) return;
+    const op = RV.ply >= 1 ? rvGameOpening() : null;
+    if (!op) { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = '';
+    const nm = document.createElement('span'); nm.className = 'rv-op-name'; nm.textContent = op.name;
+    el.appendChild(nm);
+    if (op.note) {
+      const nt = document.createElement('span'); nt.className = 'rv-op-note'; nt.textContent = op.note;
+      el.appendChild(nt);
+    }
   }
 
   function rvVerdictBox() {
@@ -4076,7 +4286,10 @@
     who.textContent = (RV.rec.names && RV.rec.names[vd.player] ? RV.rec.names[vd.player] : 'Player ' + (vd.player + 1)) + ':';
     const nm = document.createElement('span'); nm.className = 'vd-name'; nm.textContent = info.name;
     const nt = document.createElement('span'); nt.className = 'vd-note';
-    nt.textContent = (vd.key === 'best' || vd.key === 'book' || vd.key === 'brilliant')
+    // A book move names its opening instead of the generic "known opening": the whole point of
+    // recognising it is to tell you WHICH one you are in.
+    nt.textContent = vd.opening ? vd.opening
+      : (vd.key === 'best' || vd.key === 'book' || vd.key === 'brilliant')
       ? info.note : '\u2212' + Math.round(vd.loss * 100) + '% win chance';
     box.append(who, nm, nt);
   }
@@ -4455,6 +4668,8 @@
 
   const AN = {
     on: false, showBest: true, pending: false,
+    // La recherche continue: quelle position elle suit, comment l'arreter, et pourquoi elle a fini.
+    streamPly: -1, stopStream: null, streamDone: false, streamWhy: null, shownPly: -1,
     budget: 420,
     evals: [], snaps: [], acts: [], verdicts: [],
     lastLen: 0, lastSig: '',
@@ -4520,28 +4735,36 @@
   // Answers with a promise: the search may be running on another thread. Off the main thread
   // it gets several times the budget, because the only thing capping it there was how long
   // the page may stop responding.
+  // Les options d'analyse, au meme endroit pour la recherche en une fois et pour celle qui
+  // diffuse ses profondeurs. rootAll pour la meme raison que le bot, et une de plus ici: ce
+  // panneau met une note sur le coup joue, et un coup que la recherche n'a jamais regarde n'a pas
+  // de note a comparer.
+  const AN_OPTS = { maxDepth: 24, exactRoot: true, rootAll: true };
+
   function anRun(state, budget) {
-    // rootAll pour la meme raison que le bot, et une de plus ici: ce panneau met une note sur le
-    // coup joue, et un coup que la recherche n'a jamais regarde n'a pas de note a comparer.
-    return Brain.analyse(state, { budgetMs: budget, maxDepth: 24, exactRoot: true, rootAll: true }).then(r => {
-      const byMove = new Map();
-      for (const [mv, sc] of r.moves) byMove.set(mv, sc);
-      const sec = anSecond(r.moves, r.best);
-      return {
-        score: r.score, turn: state.turn, best: r.best,
-        bestAction: r.bestAction,
-        depth: r.depth, nodes: r.nodes, proven: r.proven,
-        // the ending was looked up rather than searched: the value is exact and so is the
-        // number of moves it takes
-        solved: !!r.tablebase, dist: r.dist,
-        byMove, second: sec.score, secondMove: sec.move,
-        // kept so a move the search never generated can still be scored on demand — see
-        // anScoreOf(). A copy, not the live state: M.state is mutated as the game goes on.
-        snap: R.serState(state),
-        cols: state.cols, rows: state.rows,
-        hash: r.hashLo + ':' + r.hashHi,
-      };
-    });
+    return Brain.analyse(state, Object.assign({ budgetMs: budget }, AN_OPTS)).then(r => anPack(state, r));
+  }
+  // Mettre en forme ce que le moteur rend. Extrait d'anRun pour que la recherche diffusee donne
+  // exactement la meme chose a chaque profondeur: l'affichage ne doit pas savoir laquelle des deux
+  // l'a produit.
+  function anPack(state, r) {
+    const byMove = new Map();
+    for (const [mv, sc] of r.moves) byMove.set(mv, sc);
+    const sec = anSecond(r.moves, r.best);
+    return {
+      score: r.score, turn: state.turn, best: r.best,
+      bestAction: r.bestAction,
+      depth: r.depth, nodes: r.nodes, proven: r.proven,
+      // the ending was looked up rather than searched: the value is exact and so is the
+      // number of moves it takes
+      solved: !!r.tablebase, dist: r.dist,
+      byMove, second: sec.score, secondMove: sec.move,
+      // kept so a move the search never generated can still be scored on demand — see
+      // anScoreOf(). A copy, not the live state: M.state is mutated as the game goes on.
+      snap: R.serState(state),
+      cols: state.cols, rows: state.rows,
+      hash: r.hashLo + ':' + r.hashHi,
+    };
   }
 
   // The value of one move, whether or not the search had it in its root list.
@@ -4658,10 +4881,65 @@
   }
 
   // current position first (it drives the bar and the hint), then backfill anything skipped
+  // Le panneau Path cherche EN CONTINU sur la position affichee: la fleche (ou le mur fantome)
+  // apparait des la premiere profondeur et se remplace chaque fois que le moteur trouve mieux.
+  // Avant, il y avait une phase "thinking..." pendant laquelle rien n'etait montre, puis une seule
+  // recherche d'un budget fixe, puis plus rien ne bougeait jamais.
+  //
+  // On s'arrete pendant que ce n'est PAS notre tour: le bot cherche son coup sur le meme worker,
+  // et lui prendre des tranches retarderait sa reponse.
+  function anEnsureStream() {
+    const cur = anPly();
+    const live = AN.on && anSupported() && !RV.on && M && M.state
+      && M.state.winner === null && interactive();
+    if (!live || AN.streamPly !== cur) {
+      if (AN.stopStream) { AN.stopStream(); AN.stopStream = null; }
+      if (AN.streamPly !== cur || !live) { AN.streamPly = -1; AN.streamDone = false; AN.streamWhy = null; }
+    }
+    if (!live || AN.streamPly === cur) return;
+    AN.streamPly = cur; AN.streamDone = false; AN.streamWhy = null;
+    const st = M.state;
+    AN.stopStream = Brain.stream(st, Object.assign({}, AN_OPTS, { maxDepth: 40 }), (r) => {
+      if (!AN.on || anPly() !== cur) return;
+      const ev = anPack(st, r);
+      const prev = AN.evals[cur];
+      // jamais remplacer un resultat par un moins profond: une tranche coupee par son temps rend
+      // la derniere profondeur qu'elle avait terminee
+      if (prev && !prev.none && prev.depth != null && ev.depth != null && ev.depth < prev.depth) return;
+      AN.evals[cur] = ev;
+      anRecompute();
+      render();                      // redessine la fleche ET le panneau
+    }, (why) => {
+      if (!AN.on || anPly() !== cur) return;
+      AN.streamDone = true; AN.streamWhy = why || 'depth';
+      anRenderPanel();
+    });
+  }
+
+  function anStopStream() {
+    if (AN.stopStream) { AN.stopStream(); AN.stopStream = null; }
+    AN.streamPly = -1; AN.streamDone = false; AN.streamWhy = null;
+  }
+
   function anPump() {
+    // Le panneau n'etait redessine qu'a la fin d'une recherche (anWork) ou a son ouverture. En
+    // reculant d'un coup, le plateau changeait mais les chiffres restaient ceux de la position
+    // precedente -- et si cette position-la avait deja ete evaluee, aucune recherche ne partait,
+    // donc rien ne venait corriger l'affichage. On redessine des que le demi-coup montre change.
+    if (AN.shownPly !== anPly()) { AN.shownPly = anPly(); anRenderPanel(); }
+    anEnsureStream();
     if (!AN.on || AN.pending || !anSupported()) return;
     const cur = anPly();
-    if (!AN.evals[cur]) return anWork(cur, true);
+    // La recherche continue couvre deja la position affichee; une recherche en une fois par
+    // dessus ne ferait que lui disputer le worker. On n'y revient que si elle ne tourne pas
+    // (ce n'est pas notre tour, par exemple).
+    if (!AN.evals[cur] && AN.streamPly !== cur) return anWork(cur, true);
+    // Les positions DEJA JOUEES ne se remplissent qu'une fois la position affichee evaluee. Elles
+    // ne servent qu'aux pourcentages de precision, alors que la position du moment porte la fleche
+    // que le joueur regarde -- et le worker est unique: chacune de ces recherches dure pres de deux
+    // secondes, et six d'entre elles faisaient attendre SEIZE SECONDES avant la premiere fleche,
+    // parce que le minuteur de la recherche continue passe apres les messages deja en file.
+    if (!AN.evals[cur]) return;
     for (let i = 0; i < cur; i++) if (!AN.evals[i] && AN.snaps[i]) return anWork(i, false);
   }
 
@@ -4671,7 +4949,6 @@
 
   function anWork(i, isCurrent) {
     AN.pending = true;
-    if (isCurrent) anSetDepth('thinking\u2026');
     setTimeout(() => {
       const done = () => {
         AN.pending = false;
@@ -4713,7 +4990,13 @@
     const E = anEngine();
     const at = anPly();
     const evRaw = AN.evals[at];
-    const ev = evRaw && !evRaw.none ? evRaw : null;
+    // Une evaluation dont le TRAIT ne correspond pas a la position affichee n'est pas la sienne.
+    // C'est le garde-fou qui manquait: en reculant d'un coup, le panneau pouvait encore porter le
+    // resultat d'une autre position, et il annoncait alors un "meilleur coup" que le pion au trait
+    // ne pouvait pas jouer, avec une fleche partant du mauvais pion. Plutot rien que la reponse a
+    // une autre question.
+    const evOk = evRaw && !evRaw.none && M.state && evRaw.turn === M.state.turn;
+    const ev = evOk ? evRaw : null;
     const near = meIndex();
 
     if (ev) {
@@ -4731,7 +5014,15 @@
         : ev.proven
           ? (wpNear > 0.5 ? 'Winning' : 'Losing')
           : (steps >= 0 ? '+' : '\u2212') + Math.abs(steps).toFixed(1);
-      anSetDepth(ev.solved ? 'solved' : 'depth ' + ev.depth);
+      // Prouve (ou lu dans une table de finales): la recherche s'arrete et il faut le dire,
+      // sinon une profondeur figee ressemble a un calcul en panne. La raison vient du flux et non
+      // de l'evaluation, parce que la tranche qui prouve le gain le lit souvent a profondeur 1 et
+      // ne doit pas remplacer une analyse plus profonde.
+      const settled = AN.streamPly === at && AN.streamDone
+        ? (AN.streamWhy === 'solved' || AN.streamWhy === 'proven') : false;
+      anSetDepth(ev.solved || AN.streamWhy === 'solved' ? 'solved'
+        : settled || ev.proven ? 'proven'
+        : 'depth ' + ev.depth);
       if (ev.bestAction) {
         bestEl.textContent = anMoveName(M.state, ev.bestAction);
         bestEl.disabled = false;
@@ -4766,6 +5057,22 @@
       anSetDepth('game over');
       scoreEl.textContent = M.state.winner === near ? 'Won' : 'Lost';
       bestEl.textContent = '\u2014'; bestEl.disabled = true;
+    } else {
+      // Pas encore d'analyse POUR CETTE POSITION. Il manquait ce cas: le panneau gardait alors
+      // les chiffres de la position precedente, et les presentait comme ceux de celle qu'on
+      // regarde. En reculant d'un coup on lisait donc une profondeur, une evaluation et un
+      // "meilleur coup" qui appartenaient a une autre position -- un coup qui n'y etait meme pas
+      // jouable, et des traces dessinees depuis le mauvais pion. Mieux vaut n'afficher rien que
+      // d'afficher la reponse a une autre question.
+      $('#eng-why').hidden = true;
+      $('#eng-alt').hidden = true;
+      anSetDepth('');
+      scoreEl.textContent = '\u2014';
+      bestEl.textContent = '\u2014'; bestEl.disabled = true;
+      const fill = $('#evalbar-fill'), num = $('#evalbar-num');
+      if (fill) fill.style.height = '50%';
+      if (num) num.textContent = '\u2014';
+      bar.classList.remove('proven');
     }
 
     // verdict on the move that was just played
@@ -4997,6 +5304,8 @@
     if (!AN.showBest) return;
     const ev = AN.evals[n];
     if (!ev || ev.none || !ev.bestAction) return;
+    // meme regle que le panneau: une evaluation d'un autre trait n'est pas celle de cette position
+    if (st && ev.turn !== st.turn) return;
     // The route the sentence is about: red when it is the opponent's way home being attacked,
     // green when it is your own being run down. Drawn BEFORE the recommendation, because when
     // the best move is the first step of your own route the two shapes lie on top of each other
@@ -5064,7 +5373,7 @@
     // move of this one, which must not throw away what has already been worked out
     if ((n < AN.lastLen && !tbActive()) || sig !== AN.lastSig) { anReset(); AN.lastSig = sig; }
     if (!tbActive()) AN.lastLen = n;
-    if (!anOffered()) AN.on = false;
+    if (!anOffered()) { AN.on = false; anStopStream(); }
     const btn = $('#analysis-btn');
     if (btn) {
       btn.classList.toggle('on', AN.on);
@@ -5081,6 +5390,7 @@
 
   function anToggle() {
     AN.on = !AN.on;
+    if (!AN.on) anStopStream();
     if (AN.on) anRecompute();
     render();
   }
